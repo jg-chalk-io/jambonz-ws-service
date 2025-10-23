@@ -1,6 +1,6 @@
 require('dotenv').config();
 const http = require('http');
-const {WsRequestor} = require('@jambonz/node-client-ws');
+const {createEndpoint} = require('@jambonz/node-client-ws');
 const pino = require('pino');
 const {handleIncomingCall} = require('./handlers/incoming-call');
 const {handleToolCall} = require('./handlers/tool-call');
@@ -26,13 +26,13 @@ const server = http.createServer((req, res) => {
 });
 
 // Create WebSocket endpoint
-const requestor = new WsRequestor();
-requestor.createEndpoint({server, path: WS_PATH});
+const makeService = createEndpoint({server});
+const svc = makeService({path: WS_PATH});
 
 logger.info(`WebSocket endpoint created at ${WS_PATH}`);
 
 // Handle new sessions (incoming calls)
-requestor.on('session:new', async (session) => {
+svc.on('session:new', async (session) => {
   const {call_sid, from, to, direction} = session;
 
   // Set up session logging
