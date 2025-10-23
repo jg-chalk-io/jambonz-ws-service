@@ -32,15 +32,17 @@ async function handleToolCall(session, evt) {
       default:
         logger.warn({tool: name}, 'Unknown tool called');
         session.sendToolOutput(tool_call_id, {
-          success: false,
-          error: `Unknown tool: ${name}`
+          type: 'client_tool_result',
+          invocation_id: tool_call_id,
+          error_message: `Unknown tool: ${name}`
         });
     }
   } catch (err) {
     logger.error({err, tool: name}, 'Error handling tool call');
     session.sendToolOutput(tool_call_id, {
-      success: false,
-      error: err.message
+      type: 'client_tool_result',
+      invocation_id: tool_call_id,
+      error_message: err.message
     });
   }
 }
@@ -70,10 +72,11 @@ async function handleTransfer(session, tool_call_id, args) {
 
   if (!transferNumber) {
     logger.error({destination}, 'No transfer number configured for destination');
-    // Respond to Ultravox immediately
+    // Respond to Ultravox immediately with error
     session.sendToolOutput(tool_call_id, {
-      success: false,
-      error: 'No transfer number configured'
+      type: 'client_tool_result',
+      invocation_id: tool_call_id,
+      error_message: 'No transfer number configured for this destination'
     });
     return;
   }
@@ -134,9 +137,9 @@ async function handleTransfer(session, tool_call_id, args) {
   // Then respond to Ultravox to avoid timeout
   logger.info({tool_call_id}, 'Sending tool output to Ultravox');
   session.sendToolOutput(tool_call_id, {
-    success: true,
-    message: `Transferring to ${destination} number`,
-    transfer_number: transferNumber
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: `Transfer initiated to ${destination} number`
   });
 }
 
@@ -168,10 +171,9 @@ async function handleCollectCallerInfo(session, tool_call_id, args) {
 
   // Respond immediately to Ultravox
   session.sendToolOutput(tool_call_id, {
-    success: true,
-    message: 'Information recorded successfully',
-    caller_name,
-    callback_number
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: `Information recorded for ${caller_name}`
   });
 
   logger.info('Caller info stored and confirmed to AI');
@@ -194,8 +196,9 @@ async function handleHangUp(session, tool_call_id) {
 
   // Respond to Ultravox
   session.sendToolOutput(tool_call_id, {
-    success: true,
-    message: 'Call ending'
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: 'Call ending'
   });
 
   // Then hang up using redirect

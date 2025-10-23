@@ -5,6 +5,7 @@ const pino = require('pino');
 const {handleIncomingCall} = require('./handlers/incoming-call');
 const {handleToolCall} = require('./handlers/tool-call');
 const {handleLlmComplete} = require('./handlers/llm-complete');
+const {handleLlmEvent} = require('./handlers/llm-event');
 const {handleCallStatus} = require('./handlers/call-status');
 
 const logger = pino({
@@ -48,6 +49,7 @@ svc.on('session:new', async (session) => {
     session
       .on('/toolCall', handleToolCall.bind(null, session))
       .on('/llmComplete', handleLlmComplete.bind(null, session))
+      .on('/llmEvent', handleLlmEvent.bind(null, session))
       .on('/callStatus', handleCallStatus.bind(null, session));
 
     // Handle the incoming call and generate initial response

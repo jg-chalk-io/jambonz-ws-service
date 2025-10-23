@@ -59,6 +59,7 @@ async function handleIncomingCall(session) {
         apiKey: process.env.ULTRAVOX_API_KEY
       },
       actionHook: '/llmComplete',
+      eventHook: '/llmEvent',
       toolHook: '/toolCall',
       llmOptions: {
         systemPrompt,
