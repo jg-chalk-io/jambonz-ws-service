@@ -69,47 +69,26 @@ async function handleIncomingCall(session) {
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
         transcriptOptional: true,
-        selectedTools: [
+        // Let Jambonz handle tools via toolHook instead of Ultravox temporaryTools
+        tools: [
           {
-            temporaryTool: {
-              modelToolName: 'transferToOnCall',
-              description: 'Transfer urgent/emergency calls to on-call staff immediately',
-              client: {}
+            name: 'transferToOnCall',
+            description: 'Transfer urgent/emergency calls to on-call staff immediately',
+            parameters: {}
+          },
+          {
+            name: 'collectCallerInfo',
+            description: 'Collect detailed caller information for non-urgent matters',
+            parameters: {
+              caller_name: {type: 'string', description: "Caller's full name", required: true},
+              callback_number: {type: 'string', description: 'Phone number for callback', required: true},
+              concern_description: {type: 'string', description: 'Description of their concern', required: true}
             }
           },
           {
-            temporaryTool: {
-              modelToolName: 'collectCallerInfo',
-              description: 'Collect detailed caller information for non-urgent matters',
-              dynamicParameters: [
-                {
-                  name: 'caller_name',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {type: 'string', description: "Caller's full name"},
-                  required: true
-                },
-                {
-                  name: 'callback_number',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {type: 'string', description: 'Phone number for callback'},
-                  required: true
-                },
-                {
-                  name: 'concern_description',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {type: 'string', description: 'Description of their concern'},
-                  required: true
-                }
-              ],
-              client: {}
-            }
-          },
-          {
-            temporaryTool: {
-              modelToolName: 'hangUp',
-              description: 'End the call politely after collecting information or transferring',
-              client: {}
-            }
+            name: 'hangUp',
+            description: 'End the call politely after collecting information or transferring',
+            parameters: {}
           }
         ]
       }
