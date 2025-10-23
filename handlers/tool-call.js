@@ -88,14 +88,25 @@ async function handleTransfer(session, tool_call_id, args) {
   // Execute the transfer using redirect command FIRST
   logger.info({transferNumber}, 'Executing sendCommand redirect for transfer');
 
-  // Use Twilio number as callerId (must be a verified/owned number)
-  // Fall back to client's configured caller ID or environment variable
-  const outboundCallerId = client.outbound_caller_id ||
-                          process.env.TWILIO_CALLER_ID ||
-                          process.env.OFFICE_PHONE ||
-                          '+16479526096'; // Default to the inbound number
+  // Preserve original caller ID when transferring to Aircall via SIP
+  // Use the original caller's number so it shows up in Aircall
+  const outboundCallerId = from; // Use original caller's number
 
-  logger.info({outboundCallerId, originalCaller: from}, 'Using outbound caller ID for transfer');
+  logger.info({outboundCallerId, originalCaller: from, transferNumber}, 'Transferring with original caller ID preserved');
+
+  // Check if transfer destination is a SIP URI (Aircall) or phone number
+  const isAircallSip = transferNumber && transferNumber.includes('@');
+
+  const dialTarget = isAircallSip ? [{
+    type: 'sip',
+    sipUri: transferNumber
+  }] : [{
+    type: 'phone',
+    number: transferNumber,
+    trunk: client.sip_trunk_name || process.env.SIP_TRUNK_NAME
+  }];
+
+  logger.info({dialTarget}, 'Using dial target configuration');
 
   session.sendCommand('redirect', [
     {
@@ -106,11 +117,11 @@ async function handleTransfer(session, tool_call_id, args) {
       verb: 'dial',
       callerId: outboundCallerId,
       answerOnBridge: true,
-      target: [{
-        type: 'phone',
-        number: transferNumber,
-        trunk: client.sip_trunk_name || process.env.SIP_TRUNK_NAME
-      }]
+      target: dialTarget,
+      headers: {
+        'X-Original-Caller': from,
+        'X-Transfer-Reason': reason
+      }
     }
   ]);
 
