@@ -49,7 +49,7 @@ async function handleIncomingCall(session) {
   logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
 
   // Build LLM verb with Ultravox
-  // Use selectedTools with temporaryTool - Jambonz will intercept via toolHook
+  // Start without tools to get basic call working first
   session
     .pause({length: 0.5})
     .llm({
@@ -59,7 +59,6 @@ async function handleIncomingCall(session) {
         apiKey: process.env.ULTRAVOX_API_KEY
       },
       actionHook: '/llmComplete',
-      toolHook: '/toolCall',
       llmOptions: {
         systemPrompt,
         firstSpeaker: 'FIRST_SPEAKER_AGENT',
@@ -69,69 +68,7 @@ async function handleIncomingCall(session) {
         }],
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
-        transcriptOptional: true,
-        selectedTools: [
-          {
-            temporaryTool: {
-              modelToolName: 'transferToOnCall',
-              description: 'Transfer urgent/emergency calls to on-call staff immediately. Use this when caller indicates urgency or emergency.',
-              dynamicParameters: [
-                {
-                  name: 'destination',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {
-                    type: 'string',
-                    enum: ['primary', 'secondary'],
-                    description: 'Which number to transfer to'
-                  },
-                  required: false
-                },
-                {
-                  name: 'reason',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {
-                    type: 'string',
-                    description: 'Brief reason for transfer'
-                  },
-                  required: false
-                }
-              ]
-            }
-          },
-          {
-            temporaryTool: {
-              modelToolName: 'collectCallerInfo',
-              description: 'Collect detailed caller information for non-urgent matters. Ask for their name, callback number, and concern.',
-              dynamicParameters: [
-                {
-                  name: 'caller_name',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {type: 'string', description: "Caller's full name"},
-                  required: true
-                },
-                {
-                  name: 'callback_number',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {type: 'string', description: 'Phone number for callback'},
-                  required: true
-                },
-                {
-                  name: 'concern_description',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {type: 'string', description: 'Description of concern'},
-                  required: true
-                }
-              ]
-            }
-          },
-          {
-            temporaryTool: {
-              modelToolName: 'hangUp',
-              description: 'End the call politely after handling.',
-              dynamicParameters: []
-            }
-          }
-        ]
+        transcriptOptional: true
       }
     })
     .reply();
