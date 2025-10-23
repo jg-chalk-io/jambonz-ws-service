@@ -85,18 +85,10 @@ async function handleTransfer(session, tool_call_id, args) {
     logger.error({err}, 'Error marking call as transferred');
   }
 
-  // Respond to Ultravox immediately to avoid timeout
-  logger.info({tool_call_id}, 'Sending tool output to Ultravox');
-  session.sendToolOutput(tool_call_id, {
-    success: true,
-    message: `Transferring to ${destination} number`,
-    transfer_number: transferNumber
-  });
-
-  // Then execute the transfer using redirect command
+  // Execute the transfer using redirect command FIRST
   logger.info({transferNumber}, 'Executing sendCommand redirect for transfer');
 
-  const redirectResult = session.sendCommand('redirect', [
+  session.sendCommand('redirect', [
     {
       verb: 'say',
       text: 'Please hold while I transfer you to our on-call team.'
@@ -113,7 +105,15 @@ async function handleTransfer(session, tool_call_id, args) {
     }
   ]);
 
-  logger.info({transferNumber, from, destination, redirectResult}, 'Transfer redirect command sent');
+  logger.info({transferNumber, from, destination}, 'Transfer redirect command sent');
+
+  // Then respond to Ultravox to avoid timeout
+  logger.info({tool_call_id}, 'Sending tool output to Ultravox');
+  session.sendToolOutput(tool_call_id, {
+    success: true,
+    message: `Transferring to ${destination} number`,
+    transfer_number: transferNumber
+  });
 }
 
 /**
