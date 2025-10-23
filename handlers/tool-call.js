@@ -88,6 +88,15 @@ async function handleTransfer(session, tool_call_id, args) {
   // Execute the transfer using redirect command FIRST
   logger.info({transferNumber}, 'Executing sendCommand redirect for transfer');
 
+  // Use Twilio number as callerId (must be a verified/owned number)
+  // Fall back to client's configured caller ID or environment variable
+  const outboundCallerId = client.outbound_caller_id ||
+                          process.env.TWILIO_CALLER_ID ||
+                          process.env.OFFICE_PHONE ||
+                          '+16479526096'; // Default to the inbound number
+
+  logger.info({outboundCallerId, originalCaller: from}, 'Using outbound caller ID for transfer');
+
   session.sendCommand('redirect', [
     {
       verb: 'say',
@@ -95,7 +104,7 @@ async function handleTransfer(session, tool_call_id, args) {
     },
     {
       verb: 'dial',
-      callerId: from,
+      callerId: outboundCallerId,
       answerOnBridge: true,
       target: [{
         type: 'phone',
