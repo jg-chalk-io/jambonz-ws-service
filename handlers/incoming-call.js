@@ -69,26 +69,42 @@ async function handleIncomingCall(session) {
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
         transcriptOptional: true,
-        // Let Jambonz handle tools via toolHook instead of Ultravox temporaryTools
-        tools: [
+        // Use selectedTools (Ultravox format) with modelToolName definitions
+        // Jambonz will route tool calls to our toolHook WebSocket endpoint
+        selectedTools: [
           {
-            name: 'transferToOnCall',
+            modelToolName: 'transferToOnCall',
             description: 'Transfer urgent/emergency calls to on-call staff immediately',
-            parameters: {}
+            dynamicParameters: []
           },
           {
-            name: 'collectCallerInfo',
+            modelToolName: 'collectCallerInfo',
             description: 'Collect detailed caller information for non-urgent matters',
-            parameters: {
-              caller_name: {type: 'string', description: "Caller's full name", required: true},
-              callback_number: {type: 'string', description: 'Phone number for callback', required: true},
-              concern_description: {type: 'string', description: 'Description of their concern', required: true}
-            }
+            dynamicParameters: [
+              {
+                name: 'caller_name',
+                location: 'PARAMETER_LOCATION_BODY',
+                schema: {type: 'string', description: "Caller's full name"},
+                required: true
+              },
+              {
+                name: 'callback_number',
+                location: 'PARAMETER_LOCATION_BODY',
+                schema: {type: 'string', description: 'Phone number for callback'},
+                required: true
+              },
+              {
+                name: 'concern_description',
+                location: 'PARAMETER_LOCATION_BODY',
+                schema: {type: 'string', description: 'Description of their concern'},
+                required: true
+              }
+            ]
           },
           {
-            name: 'hangUp',
+            modelToolName: 'hangUp',
             description: 'End the call politely after collecting information or transferring',
-            parameters: {}
+            dynamicParameters: []
           }
         ]
       }
