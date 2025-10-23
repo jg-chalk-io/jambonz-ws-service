@@ -118,9 +118,13 @@ async function handleTransfer(session, tool_call_id, args) {
       callerId: outboundCallerId,
       answerOnBridge: true,
       target: dialTarget,
-      headers: {
+      // Add SIP headers to preserve caller context
+      // P-Asserted-Identity and Remote-Party-ID help Aircall show original caller
+      sipHeaders: {
         'X-Original-Caller': from,
-        'X-Transfer-Reason': reason
+        'X-Transfer-Reason': reason,
+        'P-Asserted-Identity': `<sip:${from.replace('+', '')}@${client.sip_domain || 'getvetwise.sip.jambonz.cloud'}>`,
+        'Remote-Party-ID': `<sip:${from.replace('+', '')}@${client.sip_domain || 'getvetwise.sip.jambonz.cloud'}>;party=calling;privacy=off;screen=no`
       }
     }
   ]);
