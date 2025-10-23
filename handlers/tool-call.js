@@ -3,6 +3,8 @@ const {CallLog} = require('../models/CallLog');
 /**
  * Handle tool calls from Ultravox AI agent
  * The session object provides full call context
+ *
+ * IMPORTANT: Must respond immediately with sendToolOutput to avoid timeout
  */
 async function handleToolCall(session, evt) {
   const {logger, client} = session.locals;
@@ -11,38 +13,50 @@ async function handleToolCall(session, evt) {
 
   logger.info({tool: name, args, tool_call_id}, 'Tool call received');
 
-  // Route to appropriate tool handler
-  switch (name) {
-    case 'transferToOnCall':
-    case 'transfer_to_human':
-      await handleTransfer(session, args);
-      break;
+  try {
+    // Route to appropriate tool handler
+    switch (name) {
+      case 'transferToOnCall':
+      case 'transfer_to_human':
+        await handleTransfer(session, tool_call_id, args);
+        break;
 
-    case 'collectCallerInfo':
-      await handleCollectCallerInfo(session, args);
-      break;
+      case 'collectCallerInfo':
+        await handleCollectCallerInfo(session, tool_call_id, args);
+        break;
 
-    case 'hangUp':
-      await handleHangUp(session);
-      break;
+      case 'hangUp':
+        await handleHangUp(session, tool_call_id);
+        break;
 
-    default:
-      logger.warn({tool: name}, 'Unknown tool called');
-      session.reply(); // Acknowledge but do nothing
+      default:
+        logger.warn({tool: name}, 'Unknown tool called');
+        session.sendToolOutput(tool_call_id, {
+          success: false,
+          error: `Unknown tool: ${name}`
+        });
+    }
+  } catch (err) {
+    logger.error({err, tool: name}, 'Error handling tool call');
+    session.sendToolOutput(tool_call_id, {
+      success: false,
+      error: err.message
+    });
   }
 }
 
 /**
  * Transfer call to human agent
+ * Uses Jambonz pattern: sendToolOutput immediately, then redirect
  */
-async function handleTransfer(session, args) {
+async function handleTransfer(session, tool_call_id, args) {
   const {logger, client} = session.locals;
   const {call_sid, from} = session;
 
   logger.info({args}, 'Executing transfer');
 
   const destination = args.destination || 'primary';
-  const reason = args.reason || 'Customer requested human agent';
+  const reason = args.reason || args.conversation_summary || 'Customer requested human agent';
 
   // Get transfer phone number from client config
   let transferNumber;
@@ -56,10 +70,11 @@ async function handleTransfer(session, args) {
 
   if (!transferNumber) {
     logger.error({destination}, 'No transfer number configured for destination');
-    session
-      .say({text: 'I apologize, but I am unable to transfer your call at this time. Someone will call you back shortly.'})
-      .hangup()
-      .reply();
+    // Respond to Ultravox immediately
+    session.sendToolOutput(tool_call_id, {
+      success: false,
+      error: 'No transfer number configured'
+    });
     return;
   }
 
@@ -70,23 +85,29 @@ async function handleTransfer(session, args) {
     logger.error({err}, 'Error marking call as transferred');
   }
 
-  // Get last 4 digits of caller number for whisper
-  const callerLast4 = from ? from.slice(-4) : '****';
+  // Respond to Ultravox immediately to avoid timeout
+  session.sendToolOutput(tool_call_id, {
+    success: true,
+    message: `Transferring to ${destination} number`,
+    transfer_number: transferNumber
+  });
 
-  // Execute transfer with announcement
-  session
-    .say({
+  // Then execute the transfer using redirect command
+  session.sendCommand('redirect', [
+    {
+      verb: 'say',
       text: 'Please hold while I transfer you to our on-call team.'
-    })
-    .dial({
+    },
+    {
+      verb: 'dial',
       target: [{
         type: 'phone',
         number: transferNumber
       }],
       callerId: from,
       answerOnBridge: true
-    })
-    .reply();
+    }
+  ]);
 
   logger.info({transferNumber, from, destination}, 'Transfer initiated successfully');
 }
@@ -94,7 +115,7 @@ async function handleTransfer(session, args) {
 /**
  * Collect caller information
  */
-async function handleCollectCallerInfo(session, args) {
+async function handleCollectCallerInfo(session, tool_call_id, args) {
   const {logger} = session.locals;
   const {call_sid} = session;
 
@@ -117,15 +138,21 @@ async function handleCollectCallerInfo(session, args) {
     logger.error({err}, 'Error storing caller info');
   }
 
-  // Acknowledge to the LLM that info was recorded
-  // The LLM will naturally continue the conversation
-  session.reply();
+  // Respond immediately to Ultravox
+  session.sendToolOutput(tool_call_id, {
+    success: true,
+    message: 'Information recorded successfully',
+    caller_name,
+    callback_number
+  });
+
+  logger.info('Caller info stored and confirmed to AI');
 }
 
 /**
  * Hang up the call
  */
-async function handleHangUp(session) {
+async function handleHangUp(session, tool_call_id) {
   const {logger} = session.locals;
   const {call_sid} = session;
 
@@ -137,9 +164,16 @@ async function handleHangUp(session) {
     logger.error({err}, 'Error updating call status');
   }
 
-  session
-    .hangup()
-    .reply();
+  // Respond to Ultravox
+  session.sendToolOutput(tool_call_id, {
+    success: true,
+    message: 'Call ending'
+  });
+
+  // Then hang up using redirect
+  session.sendCommand('redirect', [
+    {verb: 'hangup'}
+  ]);
 }
 
 module.exports = {handleToolCall};
