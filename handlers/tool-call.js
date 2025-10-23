@@ -86,6 +86,7 @@ async function handleTransfer(session, tool_call_id, args) {
   }
 
   // Respond to Ultravox immediately to avoid timeout
+  logger.info({tool_call_id}, 'Sending tool output to Ultravox');
   session.sendToolOutput(tool_call_id, {
     success: true,
     message: `Transferring to ${destination} number`,
@@ -93,23 +94,26 @@ async function handleTransfer(session, tool_call_id, args) {
   });
 
   // Then execute the transfer using redirect command
-  session.sendCommand('redirect', [
+  logger.info({transferNumber}, 'Executing sendCommand redirect for transfer');
+
+  const redirectResult = session.sendCommand('redirect', [
     {
       verb: 'say',
       text: 'Please hold while I transfer you to our on-call team.'
     },
     {
       verb: 'dial',
+      callerId: from,
+      answerOnBridge: true,
       target: [{
         type: 'phone',
-        number: transferNumber
-      }],
-      callerId: from,
-      answerOnBridge: true
+        number: transferNumber,
+        trunk: client.sip_trunk_name || process.env.SIP_TRUNK_NAME
+      }]
     }
   ]);
 
-  logger.info({transferNumber, from, destination}, 'Transfer initiated successfully');
+  logger.info({transferNumber, from, destination, redirectResult}, 'Transfer redirect command sent');
 }
 
 /**
