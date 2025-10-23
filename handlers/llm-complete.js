@@ -9,12 +9,8 @@ async function handleLlmComplete(session, evt) {
 
   logger.info({evt}, 'LLM session complete');
 
-  const completionReason = evt.completion_reason || 'unknown';
-
   try {
-    await CallLog.updateStatus(call_sid, 'llm_complete', {
-      llm_completion_reason: completionReason
-    });
+    await CallLog.updateStatus(call_sid, 'llm_complete');
   } catch (err) {
     logger.error({err}, 'Error updating LLM completion');
   }

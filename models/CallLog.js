@@ -49,14 +49,20 @@ class CallLog {
   /**
    * Mark call as transferred
    */
-  static async markTransferred(callSid, transferredTo) {
+  static async markTransferred(callSid, transferredTo, reason = null) {
     try {
+      const updateData = {
+        transferred_to_human: true,
+        transfer_destination: transferredTo
+      };
+
+      if (reason) {
+        updateData.transfer_reason = reason;
+      }
+
       const {error} = await supabase
         .from('call_logs')
-        .update({
-          transferred_to_human: true,
-          transfer_destination: transferredTo
-        })
+        .update(updateData)
         .eq('call_sid', callSid);
 
       if (error) throw error;

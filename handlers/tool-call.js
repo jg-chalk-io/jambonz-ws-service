@@ -65,7 +65,7 @@ async function handleTransfer(session, args) {
 
   // Mark call as transferred in database
   try {
-    await CallLog.markTransferred(call_sid, transferNumber);
+    await CallLog.markTransferred(call_sid, transferNumber, reason);
   } catch (err) {
     logger.error({err}, 'Error marking call as transferred');
   }
