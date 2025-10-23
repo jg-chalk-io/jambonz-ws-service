@@ -49,6 +49,7 @@ async function handleIncomingCall(session) {
   logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
 
   // Build LLM verb with Ultravox
+  // Configure tools at Jambonz level (not in llmOptions) so they route through toolHook
   session
     .pause({length: 0.5})
     .llm({
@@ -59,6 +60,57 @@ async function handleIncomingCall(session) {
       },
       actionHook: '/llmComplete',
       toolHook: '/toolCall',
+      // Tools defined here route through Jambonz's toolHook instead of Ultravox
+      tools: [
+        {
+          name: 'transferToOnCall',
+          description: 'Transfer urgent/emergency calls to on-call staff immediately. Use this when caller indicates urgency or emergency.',
+          parameters: {
+            type: 'object',
+            properties: {
+              destination: {
+                type: 'string',
+                enum: ['primary', 'secondary'],
+                description: 'Which number to transfer to (primary or secondary)'
+              },
+              reason: {
+                type: 'string',
+                description: 'Brief reason for the transfer'
+              }
+            }
+          }
+        },
+        {
+          name: 'collectCallerInfo',
+          description: 'Collect detailed caller information for non-urgent matters. Ask for their name, callback number, and description of their concern.',
+          parameters: {
+            type: 'object',
+            properties: {
+              caller_name: {
+                type: 'string',
+                description: "Caller's full name"
+              },
+              callback_number: {
+                type: 'string',
+                description: 'Phone number for callback'
+              },
+              concern_description: {
+                type: 'string',
+                description: 'Description of their concern'
+              }
+            },
+            required: ['caller_name', 'callback_number', 'concern_description']
+          }
+        },
+        {
+          name: 'hangUp',
+          description: 'End the call politely after collecting information or completing transfer.',
+          parameters: {
+            type: 'object',
+            properties: {}
+          }
+        }
+      ],
       llmOptions: {
         systemPrompt,
         firstSpeaker: 'FIRST_SPEAKER_AGENT',
@@ -68,45 +120,7 @@ async function handleIncomingCall(session) {
         }],
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
-        transcriptOptional: true,
-        // Use selectedTools (Ultravox format) with modelToolName definitions
-        // Jambonz will route tool calls to our toolHook WebSocket endpoint
-        selectedTools: [
-          {
-            modelToolName: 'transferToOnCall',
-            description: 'Transfer urgent/emergency calls to on-call staff immediately',
-            dynamicParameters: []
-          },
-          {
-            modelToolName: 'collectCallerInfo',
-            description: 'Collect detailed caller information for non-urgent matters',
-            dynamicParameters: [
-              {
-                name: 'caller_name',
-                location: 'PARAMETER_LOCATION_BODY',
-                schema: {type: 'string', description: "Caller's full name"},
-                required: true
-              },
-              {
-                name: 'callback_number',
-                location: 'PARAMETER_LOCATION_BODY',
-                schema: {type: 'string', description: 'Phone number for callback'},
-                required: true
-              },
-              {
-                name: 'concern_description',
-                location: 'PARAMETER_LOCATION_BODY',
-                schema: {type: 'string', description: 'Description of their concern'},
-                required: true
-              }
-            ]
-          },
-          {
-            modelToolName: 'hangUp',
-            description: 'End the call politely after collecting information or transferring',
-            dynamicParameters: []
-          }
-        ]
+        transcriptOptional: true
       }
     })
     .reply();
