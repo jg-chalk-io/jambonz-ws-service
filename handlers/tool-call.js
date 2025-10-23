@@ -47,11 +47,11 @@ async function handleTransfer(session, args) {
   // Get transfer phone number from client config
   let transferNumber;
   if (destination === 'primary') {
-    transferNumber = client.transfer_primary_phone;
+    transferNumber = client.primary_transfer_number;
   } else if (destination === 'secondary') {
-    transferNumber = client.transfer_secondary_phone;
+    transferNumber = client.secondary_transfer_number;
   } else if (destination === 'voicemail') {
-    transferNumber = client.voicemail_phone;
+    transferNumber = client.voicemail_number;
   }
 
   if (!transferNumber) {
@@ -73,10 +73,10 @@ async function handleTransfer(session, args) {
   // Get last 4 digits of caller number for whisper
   const callerLast4 = from ? from.slice(-4) : '****';
 
-  // Execute transfer with whisper
+  // Execute transfer with announcement
   session
     .say({
-      text: 'Please hold while I transfer you.'
+      text: 'Please hold while I transfer you to our on-call team.'
     })
     .dial({
       target: [{
@@ -84,25 +84,11 @@ async function handleTransfer(session, args) {
         number: transferNumber
       }],
       callerId: from,
-      answerOnBridge: true,
-      dtmfCapture: ['*'],
-      dtmfHook: {
-        url: '/dtmf-transfer',
-        method: 'POST'
-      },
-      confirmHook: {
-        url: '/whisper',
-        method: 'POST'
-      },
-      // Whisper announcement to human agent
-      listen: {
-        url: `ws://example.com/listen`,
-        mixType: 'stereo'
-      }
+      answerOnBridge: true
     })
     .reply();
 
-  logger.info({transferNumber}, 'Transfer initiated');
+  logger.info({transferNumber, from, destination}, 'Transfer initiated successfully');
 }
 
 /**
