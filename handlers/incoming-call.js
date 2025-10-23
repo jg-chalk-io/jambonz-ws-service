@@ -1,0 +1,202 @@
+const {Client} = require('../models/Client');
+const {CallLog} = require('../models/CallLog');
+const {BusinessHoursChecker} = require('../lib/business-hours');
+
+/**
+ * Handle incoming call - initial call setup
+ */
+async function handleIncomingCall(session) {
+  const {call_sid, account_sid, from, to, direction} = session;
+  const {logger} = session.locals;
+
+  logger.info({from, to, account_sid}, 'Processing incoming call');
+
+  // Get client configuration
+  const client = await Client.getByAccountSid(account_sid);
+  if (!client) {
+    logger.error({account_sid}, 'No client found for account_sid');
+    session
+      .say({text: 'No route found'})
+      .hangup()
+      .reply();
+    return;
+  }
+
+  // Store client in session for tool calls
+  session.locals.client = client;
+
+  // Log the call
+  try {
+    await CallLog.create(client.id, call_sid, from, to, direction);
+  } catch (err) {
+    logger.error({err}, 'Error creating call log');
+  }
+
+  // Check if client has Ultravox agent configured
+  if (!client.ultravox_agent_id) {
+    logger.error({client: client.name}, 'No ultravox_agent_id configured');
+    session
+      .say({text: 'Sorry, this service is not yet configured. Please call back later.'})
+      .hangup()
+      .reply();
+    return;
+  }
+
+  // Check business hours
+  const isOpen = BusinessHoursChecker.isOpen(client);
+  const systemPrompt = generateSystemPrompt(client, isOpen, from);
+
+  logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
+
+  // Build LLM verb with Ultravox
+  session
+    .pause({length: 0.5})
+    .llm({
+      vendor: 'ultravox',
+      model: 'fixie-ai/ultravox',
+      auth: {
+        apiKey: process.env.ULTRAVOX_API_KEY
+      },
+      actionHook: '/llmComplete',
+      toolHook: '/toolCall',
+      llmOptions: {
+        systemPrompt,
+        firstSpeaker: 'FIRST_SPEAKER_AGENT',
+        initialMessages: [{
+          medium: 'MESSAGE_MEDIUM_VOICE',
+          role: 'MESSAGE_ROLE_USER'
+        }],
+        model: 'fixie-ai/ultravox',
+        voice: client.agent_voice || 'Jessica',
+        transcriptOptional: true,
+        selectedTools: [
+          {
+            temporaryTool: {
+              modelToolName: 'transferToOnCall',
+              description: 'Transfer urgent/emergency calls to on-call staff immediately',
+              client: {}
+            }
+          },
+          {
+            temporaryTool: {
+              modelToolName: 'collectCallerInfo',
+              description: 'Collect detailed caller information for non-urgent matters',
+              dynamicParameters: [
+                {
+                  name: 'caller_name',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {type: 'string', description: "Caller's full name"},
+                  required: true
+                },
+                {
+                  name: 'callback_number',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {type: 'string', description: 'Phone number for callback'},
+                  required: true
+                },
+                {
+                  name: 'concern_description',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {type: 'string', description: 'Description of their concern'},
+                  required: true
+                }
+              ],
+              client: {}
+            }
+          },
+          {
+            temporaryTool: {
+              modelToolName: 'hangUp',
+              description: 'End the call politely after collecting information or transferring',
+              client: {}
+            }
+          }
+        ]
+      }
+    })
+    .reply();
+}
+
+/**
+ * Generate system prompt with client-specific variables
+ */
+function generateSystemPrompt(client, isAfterHours, callerNumber) {
+  const template = isAfterHours ? getAfterHoursPrompt() : getBusinessHoursPrompt();
+
+  // Get last 4 digits of caller number
+  const callerLast4 = callerNumber ? callerNumber.slice(-4) : '****';
+
+  // Current time info
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: client.business_hours_config?.timezone || 'America/Toronto',
+    weekday: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  const currentTime = formatter.format(now);
+
+  return template
+    .replace(/\{\{office_name\}\}/g, client.office_name || client.name)
+    .replace(/\{\{office_hours\}\}/g, client.office_hours || 'Please check our website')
+    .replace(/\{\{office_phone\}\}/g, client.office_phone || '')
+    .replace(/\{\{office_website\}\}/g, client.office_website || '')
+    .replace(/\{\{caller_phone_last4\}\}/g, callerLast4)
+    .replace(/\{\{current_time\}\}/g, currentTime)
+    .replace(/\{\{day_of_week\}\}/g, now.toLocaleDateString('en-US', {weekday: 'long'}));
+}
+
+function getBusinessHoursPrompt() {
+  return `You are a professional receptionist for {{office_name}}. Your role is to handle incoming calls with courtesy and efficiency.
+
+CURRENT CONTEXT:
+- Office: {{office_name}}
+- Current time: {{current_time}} ({{day_of_week}})
+- Caller ID: ending in {{caller_phone_last4}}
+
+YOUR RESPONSIBILITIES:
+1. **Urgent/Emergency Calls**: If the caller indicates this is urgent, an emergency, or they need immediate assistance, use the transferToOnCall tool immediately
+2. **Non-Urgent Calls**: For routine matters, use collectCallerInfo tool to gather their name, callback number, and reason for calling
+3. **After Collection**: Once you've collected information OR transferred the call, use the hangUp tool to end the call politely
+
+IMPORTANT GUIDELINES:
+- Be warm, professional, and efficient
+- Listen carefully to determine urgency
+- Don't keep callers waiting - act quickly on their needs
+- Always confirm you've recorded their information correctly
+- Thank them for calling before hanging up
+
+TOOLS:
+- transferToOnCall: Use for urgent/emergency situations
+- collectCallerInfo: Use for routine inquiries (requires name, number, description)
+- hangUp: Use after handling the call to end it politely`;
+}
+
+function getAfterHoursPrompt() {
+  return `You are the after-hours answering service for {{office_name}}. The office is currently closed.
+
+CURRENT CONTEXT:
+- Office: {{office_name}}
+- Office Hours: {{office_hours}}
+- Current time: {{current_time}} ({{day_of_week}})
+- Caller ID: ending in {{caller_phone_last4}}
+
+OFFICE IS CLOSED - YOUR RESPONSIBILITIES:
+1. **True Emergencies ONLY**: If this is a life-threatening emergency, use transferToOnCall
+2. **Non-Emergency After Hours**: For all other calls, politely inform them the office is closed and use collectCallerInfo
+3. **After Collection**: Once handled, use hangUp
+
+IMPORTANT:
+- Be sympathetic but firm about office hours
+- Only transfer TRUE emergencies (life/death situations)
+- For routine matters, assure them someone will call back during business hours
+- Suggest they call back during {{office_hours}} for non-urgent matters
+
+TOOLS:
+- transferToOnCall: ONLY for life-threatening emergencies
+- collectCallerInfo: For all other after-hours callers
+- hangUp: End the call after handling`;
+}
+
+module.exports = {handleIncomingCall};

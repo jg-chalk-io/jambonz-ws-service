@@ -1,0 +1,86 @@
+require('dotenv').config();
+const http = require('http');
+const {WsRequestor} = require('@jambonz/node-client-ws');
+const pino = require('pino');
+const {handleIncomingCall} = require('./handlers/incoming-call');
+const {handleToolCall} = require('./handlers/tool-call');
+const {handleLlmComplete} = require('./handlers/llm-complete');
+const {handleCallStatus} = require('./handlers/call-status');
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info'
+});
+
+const PORT = process.env.PORT || 3000;
+const WS_PATH = process.env.WS_PATH || '/ws';
+
+// Create HTTP server
+const server = http.createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({status: 'healthy', service: 'jambonz-ws-service'}));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+// Create WebSocket endpoint
+const requestor = new WsRequestor();
+requestor.createEndpoint({server, path: WS_PATH});
+
+logger.info(`WebSocket endpoint created at ${WS_PATH}`);
+
+// Handle new sessions (incoming calls)
+requestor.on('session:new', async (session) => {
+  const {call_sid, from, to, direction} = session;
+
+  // Set up session logging
+  session.locals = {
+    ...session.locals,
+    logger: logger.child({call_sid})
+  };
+
+  session.locals.logger.info({from, to, direction}, 'New call session');
+
+  try {
+    // Register event handlers for this session
+    session
+      .on('/toolCall', handleToolCall.bind(null, session))
+      .on('/llmComplete', handleLlmComplete.bind(null, session))
+      .on('/callStatus', handleCallStatus.bind(null, session));
+
+    // Handle the incoming call and generate initial response
+    await handleIncomingCall(session);
+  } catch (err) {
+    session.locals.logger.error({err}, 'Error handling new session');
+    session
+      .say({text: 'Sorry, an error occurred. Please try again later.'})
+      .hangup()
+      .reply();
+  }
+});
+
+// Start server
+server.listen(PORT, () => {
+  logger.info(`Jambonz WebSocket service listening on port ${PORT}`);
+  logger.info(`Health check available at http://localhost:${PORT}/health`);
+  logger.info(`WebSocket endpoint: ws://localhost:${PORT}${WS_PATH}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});

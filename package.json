@@ -1,0 +1,22 @@
+{
+  "name": "jambonz-ws-service",
+  "version": "1.0.0",
+  "description": "Jambonz WebSocket service for LLM call handling with proper session context",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "@jambonz/node-client-ws": "^0.2.11",
+    "@supabase/supabase-js": "^2.39.0",
+    "pino": "^8.17.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
