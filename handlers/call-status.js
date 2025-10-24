@@ -20,7 +20,7 @@ async function handleCallStatus(session, evt) {
     logger.error({err}, 'Error updating call status');
   }
 
-  session.reply();
+  // Event handlers should not call session.reply()
 }
 
 module.exports = {handleCallStatus};

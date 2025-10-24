@@ -9,7 +9,7 @@ async function handleLlmEvent(session, evt) {
 
   // No action needed for most events, just log them
   // Events include transcription updates, etc.
-  session.reply();
+  // DO NOT call session.reply() for event handlers
 }
 
 module.exports = {handleLlmEvent};

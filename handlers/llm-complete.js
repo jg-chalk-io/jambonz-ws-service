@@ -15,8 +15,7 @@ async function handleLlmComplete(session, evt) {
     logger.error({err}, 'Error updating LLM completion');
   }
 
-  // If not already hung up, do nothing (let call continue)
-  session.reply();
+  // Event handlers should not call session.reply()
 }
 
 module.exports = {handleLlmComplete};
