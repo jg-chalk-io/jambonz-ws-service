@@ -111,75 +111,38 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // Build redirect verbs array in correct Jambonz format
-  // Each verb is an object with the verb name as the key (not "verb" property)
-  const redirectVerbs = [
-    {
-      say: {
-        text: 'Please hold while I transfer you to our on-call team.'
-      }
-    },
-    {
-      dial: {
-        callerId: outboundCallerId,
-        answerOnBridge: true,
-        target: dialTarget,
-        headers: {
-          'X-Original-Caller': from,
-          'X-Transfer-Reason': reason
-        }
-      }
-    }
-  ];
-
   logger.info({
     dialTarget: JSON.stringify(dialTarget),
     wsReadyState: session.ws?.readyState,
     wsConnected: session.ws?.readyState === 1
-  }, 'About to execute transfer using chainable API');
+  }, 'About to execute transfer - redirect immediately without tool output');
 
-  // CRITICAL ORDER: Tool output FIRST, then redirect with delay
-  // 1. sendToolOutput queues message to Jambonz→Ultravox (via active LLM)
-  // 2. Small delay ensures message is queued before LLM is replaced
-  // 3. sendCommand('redirect') replaces LLM verb with say+dial
+  // CRITICAL FIX: Don't send tool output for transfers
+  // The redirect itself IS the tool execution - replacing LLM with dial
+  // Ultravox will see LLM session end and consider that tool completion
+  // Sending tool output causes race conditions and "not in an llm" errors
 
-  logger.info('Sending tool output to Ultravox');
+  logger.info('Executing redirect to replace LLM with transfer verbs');
 
-  session.sendToolOutput(tool_call_id, {
-    type: 'client_tool_result',
-    invocation_id: tool_call_id,
-    result: 'Transfer initiated'
-  });
-
-  logger.info('Tool output sent, scheduling redirect after delay');
-
-  // Wait 1 second before redirect to ensure:
-  // 1. Tool output message is queued/sent to Jambonz
-  // 2. Jambonz forwards it to Ultravox
-  // 3. Then redirect can safely replace the LLM verb
-  setTimeout(() => {
-    logger.info('Executing redirect to interrupt LLM session');
-
-    session.sendCommand('redirect', [
-      {
-        verb: 'say',
-        text: 'Please hold while I transfer you to our on-call team.'
-      },
-      {
-        verb: 'dial',
-        actionHook: '/dialComplete',
-        callerId: outboundCallerId,
-        answerOnBridge: true,
-        target: dialTarget,
-        headers: {
-          'X-Original-Caller': from,
-          'X-Transfer-Reason': reason
-        }
+  session.sendCommand('redirect', [
+    {
+      verb: 'say',
+      text: 'Please hold while I transfer you to our on-call team.'
+    },
+    {
+      verb: 'dial',
+      actionHook: '/dialComplete',
+      callerId: outboundCallerId,
+      answerOnBridge: true,
+      target: dialTarget,
+      headers: {
+        'X-Original-Caller': from,
+        'X-Transfer-Reason': reason
       }
-    ]);
+    }
+  ]);
 
-    logger.info('Redirect command sent to Jambonz');
-  }, 1000);
+  logger.info('Redirect command sent to Jambonz - LLM session will end and dial will begin');
 }
 
 /**
