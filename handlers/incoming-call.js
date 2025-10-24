@@ -93,17 +93,7 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              staticParameters: [
-                {
-                  name: 'call_sid',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  value: call_sid
-                }
-              ],
-              http: {
-                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/transferToOnCall`,
-                httpMethod: 'POST'
-              }
+              client: {}
             }
           },
           {
@@ -139,10 +129,7 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              http: {
-                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/collectCallerInfo`,
-                httpMethod: 'POST'
-              }
+              client: {}
             }
           }
         ]
