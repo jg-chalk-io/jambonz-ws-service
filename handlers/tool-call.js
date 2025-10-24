@@ -1,4 +1,5 @@
 const {CallLog} = require('../models/CallLog');
+const {WebhookResponse} = require('@jambonz/node-client-ws');
 
 /**
  * Handle tool calls from Ultravox AI agent
@@ -111,9 +112,9 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // Build new verb sequence and send with execImmediate to interrupt LLM
-  // This flushes the active LLM session and executes transfer immediately
-  session
+  // Build new application with say + dial verbs
+  const app = new WebhookResponse();
+  app
     .say({text: 'Please hold while I transfer you to our on-call team.'})
     .dial({
       callerId: outboundCallerId,
@@ -123,10 +124,12 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Original-Caller': from,
         'X-Transfer-Reason': reason
       }
-    })
-    .send({execImmediate: true});
+    });
 
-  logger.info({transferNumber, from, destination}, 'Transfer initiated with say + dial + send(execImmediate)');
+  // Send redirect command to interrupt LLM and execute transfer
+  session.sendCommand('redirect', call_sid, app);
+
+  logger.info({transferNumber, from, destination}, 'Transfer initiated with sendCommand redirect');
 
   // Then respond to Ultravox to avoid timeout
   logger.info({tool_call_id}, 'Sending tool output to Ultravox');
@@ -195,10 +198,12 @@ async function handleHangUp(session, tool_call_id) {
     result: 'Call ending'
   });
 
-  // Hang up the call (interrupts active LLM session)
-  session
-    .hangup()
-    .send({execImmediate: true});
+  // Build hangup application
+  const app = new WebhookResponse();
+  app.hangup();
+
+  // Send redirect command to interrupt LLM and hang up
+  session.sendCommand('redirect', call_sid, app);
 }
 
 module.exports = {handleToolCall};
