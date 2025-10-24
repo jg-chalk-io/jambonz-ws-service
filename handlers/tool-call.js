@@ -138,9 +138,10 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to execute transfer using chainable API');
 
-  // CRITICAL: Use reply() to respond to the tool call event (like HTTP webhook response)
-  // This is the equivalent of returning verbs in an HTTP response
-  logger.info('Using session.say().dial().reply() pattern (replying to tool call event)');
+  // CRITICAL: Use send() with execImmediate to send redirect command
+  // Tool call events are just events, not webhook requests, so we can't reply()
+  // We need to actively send a redirect command
+  logger.info('Using session.say().dial().send() pattern (sending redirect command)');
 
   session
     .say({text: 'Please hold while I transfer you to our on-call team.'})
@@ -153,9 +154,9 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Transfer-Reason': reason
       }
     })
-    .reply();
+    .send({execImmediate: true});
 
-  logger.info('Transfer verbs replied to Jambonz');
+  logger.info('Transfer redirect command sent to Jambonz');
 
   // Send tool output to Ultravox AFTER replying to Jambonz
   session.sendToolOutput(tool_call_id, {
