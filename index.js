@@ -150,18 +150,25 @@ svc.on('session:new', async (session) => {
 
   try {
     // Register event handlers for this session
-    // Tool calls come through as verb:hook events when using client: {} tools
+    // With client: {} tools, hooks are emitted as custom event paths (not verb:hook)
+    // See: https://github.com/jambonz/ultravox-s2s-example
     session
-      .on('verb:hook', (evt) => {
-        logger.info({evt}, 'Received verb:hook event');
-        if (evt.hook === '/toolCall') {
-          logger.info({data: evt.data}, 'Tool call detected - calling handleToolCall');
-          handleToolCall(session, evt.data);
-        } else if (evt.hook === '/llmComplete') {
-          handleLlmComplete(session, evt.data);
-        } else if (evt.hook === '/llmEvent') {
-          handleLlmEvent(session, evt.data);
-        }
+      .on('/toolCall', (evt) => {
+        logger.info({evt}, 'Received /toolCall event');
+        logger.info({
+          tool_call_id: evt.tool_call_id,
+          name: evt.name,
+          args: evt.args
+        }, 'Tool call details');
+        handleToolCall(session, evt);
+      })
+      .on('/llmComplete', (evt) => {
+        logger.info({evt}, 'Received /llmComplete event');
+        handleLlmComplete(session, evt);
+      })
+      .on('/llmEvent', (evt) => {
+        logger.info({evt}, 'Received /llmEvent event');
+        handleLlmEvent(session, evt);
       })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
