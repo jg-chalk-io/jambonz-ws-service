@@ -1,5 +1,4 @@
 const {CallLog} = require('../models/CallLog');
-const {WebhookResponse} = require('@jambonz/node-client');
 
 /**
  * Handle tool calls from Ultravox AI agent
@@ -112,11 +111,14 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // Build new application with say + dial verbs
-  const app = new WebhookResponse();
-  app
-    .say({text: 'Please hold while I transfer you to our on-call team.'})
-    .dial({
+  // Send redirect command with array of verb objects (per Jambonz example pattern)
+  session.sendCommand('redirect', [
+    {
+      verb: 'say',
+      text: 'Please hold while I transfer you to our on-call team.'
+    },
+    {
+      verb: 'dial',
       callerId: outboundCallerId,
       answerOnBridge: true,
       target: dialTarget,
@@ -124,18 +126,19 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Original-Caller': from,
         'X-Transfer-Reason': reason
       }
-    });
-
-  // Send redirect command to interrupt LLM and execute transfer
-  logger.info({app: JSON.stringify(app)}, 'About to send redirect command with app');
-  session.sendCommand('redirect', app);
+    }
+  ]);
 
   logger.info({transferNumber, from, destination}, 'Transfer initiated with sendCommand redirect');
 
-  // DO NOT send tool output to Ultravox for transfers
-  // The redirect command will end the LLM session and take over the call
-  // Sending tool output would cause Ultravox to hang up before the transfer completes
-  logger.info({tool_call_id}, 'Transfer command sent - Ultravox will be disconnected by redirect');
+  // Send tool output to Ultravox (as per Jambonz example)
+  session.sendToolOutput(tool_call_id, {
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: 'Successfully initiated transfer to agent'
+  });
+
+  logger.info({tool_call_id}, 'Tool output sent to Ultravox');
 }
 
 /**
@@ -189,19 +192,19 @@ async function handleHangUp(session, tool_call_id) {
     logger.error({err}, 'Error updating call status');
   }
 
-  // Respond to Ultravox
+  // Send redirect command with hangup verb
+  session.sendCommand('redirect', [
+    {
+      verb: 'hangup'
+    }
+  ]);
+
+  // Send tool output to Ultravox
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
     result: 'Call ending'
   });
-
-  // Build hangup application
-  const app = new WebhookResponse();
-  app.hangup();
-
-  // Send redirect command to interrupt LLM and hang up
-  session.sendCommand('redirect', call_sid, app);
 }
 
 module.exports = {handleToolCall};
