@@ -127,7 +127,7 @@ async function handleTransfer(session, tool_call_id, args) {
     });
 
   // Send redirect command to interrupt LLM and execute transfer
-  session.sendCommand('redirect', call_sid, app);
+  session.sendCommand('redirect', app);
 
   logger.info({transferNumber, from, destination}, 'Transfer initiated with sendCommand redirect');
 
