@@ -138,11 +138,19 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to execute transfer using chainable API');
 
-  // CRITICAL: Use send() with execImmediate to send redirect command
-  // Tool call events are just events, not webhook requests, so we can't reply()
-  // We need to actively send a redirect command
-  logger.info('Using session.say().dial().send() pattern (sending redirect command)');
+  // CRITICAL: Send tool output FIRST, then redirect
+  // Once redirect executes, the LLM session ends and we can't send tool output anymore
+  logger.info({tool_call_id}, 'Sending tool output to Ultravox BEFORE redirect');
 
+  session.sendToolOutput(tool_call_id, {
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: 'Successfully initiated transfer to agent'
+  });
+
+  logger.info('Tool output sent, now sending redirect command');
+
+  // Now send redirect command to replace LLM session with say+dial
   session
     .say({text: 'Please hold while I transfer you to our on-call team.'})
     .dial({
@@ -157,15 +165,6 @@ async function handleTransfer(session, tool_call_id, args) {
     .send({execImmediate: true});
 
   logger.info('Transfer redirect command sent to Jambonz');
-
-  // Send tool output to Ultravox AFTER replying to Jambonz
-  session.sendToolOutput(tool_call_id, {
-    type: 'client_tool_result',
-    invocation_id: tool_call_id,
-    result: 'Successfully initiated transfer to agent'
-  });
-
-  logger.info({tool_call_id}, 'Tool output sent to Ultravox');
 }
 
 /**
