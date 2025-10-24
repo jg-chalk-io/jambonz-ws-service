@@ -111,16 +111,7 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // IMPORTANT: Send tool output FIRST, before redirect ends the LLM session
-  session.sendToolOutput(tool_call_id, {
-    type: 'client_tool_result',
-    invocation_id: tool_call_id,
-    result: 'Successfully initiated transfer to agent'
-  });
-
-  logger.info({tool_call_id}, 'Tool output sent to Ultravox');
-
-  // Now send redirect command with array of verb objects
+  // Build redirect verbs array
   const redirectVerbs = [
     {
       verb: 'say',
@@ -145,11 +136,19 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to call session.sendCommand');
 
-  // Use sendCommand with redirect verb array
-  // sendCommand accepts arrays, injectCommand expects objects
+  // CRITICAL: Send redirect command FIRST (matching official jambonz example)
   logger.info('Calling session.sendCommand with redirect verbs');
   session.sendCommand('redirect', redirectVerbs);
   logger.info('session.sendCommand returned successfully');
+
+  // THEN send tool output to Ultravox (matching official jambonz example order)
+  session.sendToolOutput(tool_call_id, {
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: 'Successfully initiated transfer to agent'
+  });
+
+  logger.info({tool_call_id}, 'Tool output sent to Ultravox');
 }
 
 /**
