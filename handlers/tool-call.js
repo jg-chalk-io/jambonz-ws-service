@@ -118,7 +118,11 @@ async function handleTransfer(session, tool_call_id, args) {
     .dial({
       callerId: outboundCallerId,
       answerOnBridge: true,
-      target: dialTarget
+      target: dialTarget,
+      headers: {
+        'X-Original-Caller': from,
+        'X-Transfer-Reason': reason
+      }
     })
     .reply();
 
