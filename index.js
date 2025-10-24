@@ -50,11 +50,12 @@ svc.on('session:new', async (session) => {
 
   try {
     // Register event handlers for this session
+    // IMPORTANT: WebSocket events use event names like 'llm:tool-call', not path-based like '/toolCall'
     session
-      .on('/toolCall', handleToolCall.bind(null, session))
-      .on('/llmComplete', handleLlmComplete.bind(null, session))
-      .on('/llmEvent', handleLlmEvent.bind(null, session))
-      .on('/callStatus', handleCallStatus.bind(null, session));
+      .on('llm:tool-call', (evt) => handleToolCall(session, evt))
+      .on('llm:end', (evt) => handleLlmComplete(session, evt))
+      .on('llm:event', (evt) => handleLlmEvent(session, evt))
+      .on('call:status', (evt) => handleCallStatus(session, evt));
 
     // Handle the incoming call and generate initial response
     await handleIncomingCall(session);
