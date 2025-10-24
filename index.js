@@ -21,6 +21,9 @@ const WS_PATH = process.env.WS_PATH || '/ws';
 
 // Create HTTP server with webhook endpoints for Ultravox HTTP tools
 const server = http.createServer(async (req, res) => {
+  // Log ALL incoming requests to debug Ultravox webhook calls
+  logger.info({method: req.method, url: req.url, headers: req.headers}, 'Incoming HTTP request');
+
   // Parse request body for POST requests
   let body = '';
   req.on('data', chunk => {
@@ -28,6 +31,11 @@ const server = http.createServer(async (req, res) => {
   });
 
   await new Promise(resolve => req.on('end', resolve));
+
+  // Log request body for debugging
+  if (body) {
+    logger.info({body: body.substring(0, 500)}, 'Request body received');
+  }
 
   // Handle routes
   if (req.url === '/health') {
@@ -67,6 +75,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
   else {
+    logger.warn({method: req.method, url: req.url}, 'Unknown route - returning 404');
     res.writeHead(404);
     res.end();
   }
