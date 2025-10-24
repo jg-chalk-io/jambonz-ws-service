@@ -71,6 +71,12 @@ async function handleIncomingCall(session) {
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
         transcriptOptional: true,
+        // Include call_sid in metadata so HTTP tools can look up the session
+        metadata: {
+          call_sid,
+          client_id: client.id,
+          client_name: client.name
+        },
         selectedTools: [
           {
             temporaryTool: {
@@ -85,6 +91,13 @@ async function handleIncomingCall(session) {
                     description: 'Brief summary of the conversation and reason for transfer'
                   },
                   required: true
+                }
+              ],
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
                 }
               ],
               http: {

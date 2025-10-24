@@ -19,6 +19,10 @@ const logger = pino({
 const PORT = process.env.PORT || 3000;
 const WS_PATH = process.env.WS_PATH || '/ws';
 
+// Store active WebSocket sessions keyed by call_sid
+// This allows HTTP tool webhooks to find and control the correct session
+const activeSessions = new Map();
+
 // Create HTTP server with webhook endpoints for Ultravox HTTP tools
 const server = http.createServer(async (req, res) => {
   // Log ALL incoming requests to debug Ultravox webhook calls
@@ -47,11 +51,46 @@ const server = http.createServer(async (req, res) => {
       const payload = JSON.parse(body);
       logger.info({payload}, 'Received transferToOnCall HTTP tool call');
 
-      // Return success - the actual transfer logic needs access to the call session
-      // For now, just acknowledge receipt
+      // Extract call_sid from payload (passed through metadata)
+      const call_sid = payload.call_sid || payload.callSid || payload.metadata?.call_sid;
+
+      if (!call_sid) {
+        logger.error({payload}, 'No call_sid found in transferToOnCall payload');
+        res.writeHead(400, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({error: 'call_sid is required'}));
+        return;
+      }
+
+      // Look up the active WebSocket session
+      const session = activeSessions.get(call_sid);
+
+      if (!session) {
+        logger.error({call_sid, activeSessions: Array.from(activeSessions.keys())}, 'No active session found for call_sid');
+        res.writeHead(404, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({error: 'Session not found'}));
+        return;
+      }
+
+      // Execute the transfer using the tool handler
+      logger.info({call_sid}, 'Executing transfer via HTTP tool');
+
+      // Call the handler with a synthetic tool_call_id
+      const tool_call_id = payload.invocation_id || `http-${Date.now()}`;
+      const args = {
+        destination: 'primary',
+        conversation_summary: payload.conversation_summary || 'Transfer requested via HTTP tool'
+      };
+
+      // Import and execute transfer handler
+      handleToolCall(session, {
+        name: 'transferToOnCall',
+        args,
+        tool_call_id
+      });
+
       res.writeHead(200, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({
-        result: 'Transfer request acknowledged'
+        result: 'Transfer initiated successfully'
       }));
     } catch (err) {
       logger.error({err}, 'Error handling transferToOnCall');
@@ -98,6 +137,16 @@ svc.on('session:new', async (session) => {
   };
 
   session.locals.logger.info({from, to, direction}, 'New call session');
+
+  // Register this session in the active sessions map
+  activeSessions.set(call_sid, session);
+  logger.info({call_sid, totalActiveSessions: activeSessions.size}, 'Session registered in active sessions');
+
+  // Clean up session when call ends
+  session.on('close', () => {
+    activeSessions.delete(call_sid);
+    logger.info({call_sid, totalActiveSessions: activeSessions.size}, 'Session removed from active sessions');
+  });
 
   try {
     // Register event handlers for this session
