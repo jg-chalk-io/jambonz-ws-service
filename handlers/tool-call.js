@@ -131,13 +131,10 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({transferNumber, from, destination}, 'Transfer initiated with sendCommand redirect');
 
-  // Then respond to Ultravox to avoid timeout
-  logger.info({tool_call_id}, 'Sending tool output to Ultravox');
-  session.sendToolOutput(tool_call_id, {
-    type: 'client_tool_result',
-    invocation_id: tool_call_id,
-    result: `Transfer initiated to ${destination} number`
-  });
+  // DO NOT send tool output to Ultravox for transfers
+  // The redirect command will end the LLM session and take over the call
+  // Sending tool output would cause Ultravox to hang up before the transfer completes
+  logger.info({tool_call_id}, 'Transfer command sent - Ultravox will be disconnected by redirect');
 }
 
 /**
