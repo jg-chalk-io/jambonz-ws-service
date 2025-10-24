@@ -88,8 +88,8 @@ async function handleTransfer(session, tool_call_id, args) {
     logger.error({err}, 'Error marking call as transferred');
   }
 
-  // Execute the transfer using redirect command FIRST
-  logger.info({transferNumber}, 'Executing sendCommand redirect for transfer');
+  // Execute the transfer by replacing active LLM session
+  logger.info({transferNumber}, 'Executing transfer with say + dial verb sequence');
 
   // Preserve original caller ID when transferring to Aircall via SIP
   // Use the original caller's number so it shows up in Aircall
