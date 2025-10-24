@@ -88,7 +88,7 @@ async function handleIncomingCall(session) {
                 }
               ],
               http: {
-                baseUrlPattern: process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app',
+                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/transferToOnCall`,
                 httpMethod: 'HTTP_METHOD_POST'
               }
             }
@@ -127,7 +127,7 @@ async function handleIncomingCall(session) {
                 }
               ],
               http: {
-                baseUrlPattern: process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app',
+                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/collectCallerInfo`,
                 httpMethod: 'HTTP_METHOD_POST'
               }
             }
