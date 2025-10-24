@@ -133,18 +133,30 @@ async function handleTransfer(session, tool_call_id, args) {
   ];
 
   logger.info({
-    redirectVerbs: JSON.stringify(redirectVerbs),
-    hasMethod: typeof session.sendCommand,
+    dialTarget: JSON.stringify(dialTarget),
     wsReadyState: session.ws?.readyState,
     wsConnected: session.ws?.readyState === 1
-  }, 'About to call session.sendCommand');
+  }, 'About to execute transfer using chainable API');
 
-  // CRITICAL: Send redirect command FIRST (matching official jambonz example)
-  logger.info('Calling session.sendCommand with redirect verbs');
-  session.sendCommand('redirect', redirectVerbs);
-  logger.info('session.sendCommand returned successfully');
+  // Try using the chainable verb API instead of sendCommand
+  logger.info('Using session.say().dial().send() pattern');
 
-  // THEN send tool output to Ultravox (matching official jambonz example order)
+  session
+    .say({text: 'Please hold while I transfer you to our on-call team.'})
+    .dial({
+      callerId: outboundCallerId,
+      answerOnBridge: true,
+      target: dialTarget,
+      headers: {
+        'X-Original-Caller': from,
+        'X-Transfer-Reason': reason
+      }
+    })
+    .send({execImmediate: true});
+
+  logger.info('Chainable verbs sent with execImmediate=true');
+
+  // Send tool output to Ultravox
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
