@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@jambonz/node-client": "^0.4.10",
-    "@jambonz/node-client-ws": "^0.1.79",
+    "@jambonz/node-client-ws": "^0.2.12",
     "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^16.3.1",
     "pino": "^8.17.2"
