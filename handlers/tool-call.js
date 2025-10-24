@@ -138,8 +138,9 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to execute transfer using chainable API');
 
-  // Try using the chainable verb API instead of sendCommand
-  logger.info('Using session.say().dial().send() pattern');
+  // CRITICAL: Use reply() to respond to the tool call event (like HTTP webhook response)
+  // This is the equivalent of returning verbs in an HTTP response
+  logger.info('Using session.say().dial().reply() pattern (replying to tool call event)');
 
   session
     .say({text: 'Please hold while I transfer you to our on-call team.'})
@@ -152,11 +153,11 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Transfer-Reason': reason
       }
     })
-    .send({execImmediate: true});
+    .reply();
 
-  logger.info('Chainable verbs sent with execImmediate=true');
+  logger.info('Transfer verbs replied to Jambonz');
 
-  // Send tool output to Ultravox
+  // Send tool output to Ultravox AFTER replying to Jambonz
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
