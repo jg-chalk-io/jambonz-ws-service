@@ -153,7 +153,9 @@ svc.on('session:new', async (session) => {
     // Tool calls come through as verb:hook events when using client: {} tools
     session
       .on('verb:hook', (evt) => {
+        logger.info({evt}, 'Received verb:hook event');
         if (evt.hook === '/toolCall') {
+          logger.info({data: evt.data}, 'Tool call detected - calling handleToolCall');
           handleToolCall(session, evt.data);
         } else if (evt.hook === '/llmComplete') {
           handleLlmComplete(session, evt.data);
