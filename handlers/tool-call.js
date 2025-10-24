@@ -1,5 +1,5 @@
 const {CallLog} = require('../models/CallLog');
-const {WebhookResponse} = require('@jambonz/node-client-ws');
+const {WebhookResponse} = require('@jambonz/node-client');
 
 /**
  * Handle tool calls from Ultravox AI agent
