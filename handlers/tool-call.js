@@ -111,20 +111,23 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // Build redirect verbs array
+  // Build redirect verbs array in correct Jambonz format
+  // Each verb is an object with the verb name as the key (not "verb" property)
   const redirectVerbs = [
     {
-      verb: 'say',
-      text: 'Please hold while I transfer you to our on-call team.'
+      say: {
+        text: 'Please hold while I transfer you to our on-call team.'
+      }
     },
     {
-      verb: 'dial',
-      callerId: outboundCallerId,
-      answerOnBridge: true,
-      target: dialTarget,
-      headers: {
-        'X-Original-Caller': from,
-        'X-Transfer-Reason': reason
+      dial: {
+        callerId: outboundCallerId,
+        answerOnBridge: true,
+        target: dialTarget,
+        headers: {
+          'X-Original-Caller': from,
+          'X-Transfer-Reason': reason
+        }
       }
     }
   ];
