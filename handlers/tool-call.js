@@ -111,9 +111,9 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // IMPORTANT: Kill LLM session first, then redirect
-  // sendCommand('redirect') doesn't work during active LLM session
-  session.kill()
+  // Build new verb sequence and reply immediately
+  // This replaces the active LLM session
+  session
     .say({text: 'Please hold while I transfer you to our on-call team.'})
     .dial({
       callerId: outboundCallerId,
@@ -129,7 +129,7 @@ async function handleTransfer(session, tool_call_id, args) {
     })
     .reply();
 
-  logger.info({transferNumber, from, destination}, 'Transfer command sent via kill() + reply()');
+  logger.info({transferNumber, from, destination}, 'Transfer initiated with say + dial + reply');
 
   // Then respond to Ultravox to avoid timeout
   logger.info({tool_call_id}, 'Sending tool output to Ultravox');
@@ -198,8 +198,8 @@ async function handleHangUp(session, tool_call_id) {
     result: 'Call ending'
   });
 
-  // Kill LLM session and hang up
-  session.kill()
+  // Hang up the call (replaces active LLM session)
+  session
     .hangup()
     .reply();
 }
