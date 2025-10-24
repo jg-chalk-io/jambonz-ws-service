@@ -148,23 +148,34 @@ async function handleTransfer(session, tool_call_id, args) {
     result: 'Successfully initiated transfer to agent'
   });
 
-  logger.info('Tool output sent, now sending redirect command');
+  logger.info('Tool output sent, scheduling redirect command after delay');
 
-  // Now send redirect command to replace LLM session with say+dial
-  session
-    .say({text: 'Please hold while I transfer you to our on-call team.'})
-    .dial({
-      callerId: outboundCallerId,
-      answerOnBridge: true,
-      target: dialTarget,
-      headers: {
-        'X-Original-Caller': from,
-        'X-Transfer-Reason': reason
+  // Wait 5 seconds before redirecting to ensure tool output is processed
+  // This follows the pattern from jambonz/ultravox-s2s-example
+  setTimeout(() => {
+    logger.info('Executing delayed redirect to interrupt LLM session');
+
+    // Use sendCommand('redirect') to interrupt the active LLM session
+    // This is the correct way to replace an active verb with new verbs
+    session.sendCommand('redirect', [
+      {
+        verb: 'say',
+        text: 'Please hold while I transfer you to our on-call team.'
+      },
+      {
+        verb: 'dial',
+        callerId: outboundCallerId,
+        answerOnBridge: true,
+        target: dialTarget,
+        headers: {
+          'X-Original-Caller': from,
+          'X-Transfer-Reason': reason
+        }
       }
-    })
-    .send({execImmediate: true});
+    ]);
 
-  logger.info('Transfer redirect command sent to Jambonz');
+    logger.info('Transfer redirect command sent to Jambonz');
+  }, 5000);
 }
 
 /**
@@ -218,19 +229,20 @@ async function handleHangUp(session, tool_call_id) {
     logger.error({err}, 'Error updating call status');
   }
 
-  // Send redirect command with hangup verb
-  session.sendCommand('redirect', [
-    {
-      verb: 'hangup'
-    }
-  ]);
-
-  // Send tool output to Ultravox
+  // CRITICAL: Send tool output FIRST, then hang up
+  // Once hangup executes, we can't send tool output anymore
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
     result: 'Call ending'
   });
+
+  // Now hang up the call
+  session.sendCommand('redirect', [
+    {
+      verb: 'hangup'
+    }
+  ]);
 }
 
 module.exports = {handleToolCall};
