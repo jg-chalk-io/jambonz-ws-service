@@ -71,10 +71,10 @@ async function handleIncomingCall(session) {
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
         transcriptOptional: true,
-        // Include call_sid in metadata so HTTP tools can look up the session
+        // Include call metadata - all values must be strings for Ultravox
         metadata: {
           call_sid,
-          client_id: client.id,
+          client_id: String(client.id),
           client_name: client.name
         },
         selectedTools: [
