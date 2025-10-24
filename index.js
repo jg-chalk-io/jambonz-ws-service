@@ -150,11 +150,17 @@ svc.on('session:new', async (session) => {
 
   try {
     // Register event handlers for this session
-    // IMPORTANT: WebSocket events use event names like 'llm:tool-call', not path-based like '/toolCall'
+    // Tool calls come through as verb:hook events when using client: {} tools
     session
-      .on('llm:tool-call', (evt) => handleToolCall(session, evt))
-      .on('llm:end', (evt) => handleLlmComplete(session, evt))
-      .on('llm:event', (evt) => handleLlmEvent(session, evt))
+      .on('verb:hook', (evt) => {
+        if (evt.hook === '/toolCall') {
+          handleToolCall(session, evt.data);
+        } else if (evt.hook === '/llmComplete') {
+          handleLlmComplete(session, evt.data);
+        } else if (evt.hook === '/llmEvent') {
+          handleLlmEvent(session, evt.data);
+        }
+      })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
     // Handle the incoming call and generate initial response
