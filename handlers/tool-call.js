@@ -145,15 +145,15 @@ async function handleTransfer(session, tool_call_id, args) {
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
-    result: 'Successfully initiated transfer to agent'
+    result: 'Transferring now - please hold'
   });
 
-  logger.info('Tool output sent, scheduling redirect command after delay');
+  logger.info('Tool output sent, scheduling immediate redirect');
 
-  // Wait 5 seconds before redirecting to ensure tool output is processed
-  // This follows the pattern from jambonz/ultravox-s2s-example
+  // Use minimal delay (100ms) to ensure tool output is sent, then redirect immediately
+  // This prevents Ultravox from speaking after the tool is invoked
   setTimeout(() => {
-    logger.info('Executing delayed redirect to interrupt LLM session');
+    logger.info('Executing redirect to interrupt LLM session');
 
     // Use sendCommand('redirect') to interrupt the active LLM session
     // This is the correct way to replace an active verb with new verbs
@@ -176,7 +176,7 @@ async function handleTransfer(session, tool_call_id, args) {
     ]);
 
     logger.info('Transfer redirect command sent to Jambonz');
-  }, 5000);
+  }, 100);
 }
 
 /**

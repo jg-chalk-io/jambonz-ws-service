@@ -135,6 +135,7 @@ async function handleIncomingCall(session) {
         ]
       }
     })
+    .hangup()
     .reply();
 }
 
