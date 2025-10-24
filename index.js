@@ -170,6 +170,12 @@ svc.on('session:new', async (session) => {
         logger.info({evt}, 'Received /llmEvent event');
         handleLlmEvent(session, evt);
       })
+      .on('/dialComplete', (evt) => {
+        logger.info({evt}, 'Received /dialComplete event - transfer finished');
+        // No action needed - call will end naturally
+        // Respond with empty array to acknowledge
+        session.reply([]);
+      })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
     // Handle the incoming call and generate initial response

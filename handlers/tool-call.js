@@ -164,6 +164,7 @@ async function handleTransfer(session, tool_call_id, args) {
       },
       {
         verb: 'dial',
+        actionHook: '/dialComplete',
         callerId: outboundCallerId,
         answerOnBridge: true,
         target: dialTarget,
