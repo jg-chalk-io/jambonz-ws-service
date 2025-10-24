@@ -146,10 +146,19 @@ async function handleTransfer(session, tool_call_id, args) {
   }, 'About to call session.sendCommand');
 
   try {
-    const result = session.sendCommand('redirect', redirectVerbs);
-    logger.info({result, wsReadyState: session.ws?.readyState}, 'sendCommand returned');
+    // Try calling ws.send directly to bypass sendCommand
+    const msg = {
+      type: 'command',
+      command: 'redirect',
+      queueCommand: false,
+      data: redirectVerbs
+    };
+
+    logger.info({msg: JSON.stringify(msg).substring(0, 200)}, 'About to call ws.send directly');
+    session.ws.send(JSON.stringify(msg));
+    logger.info({wsReadyState: session.ws?.readyState}, 'ws.send completed');
   } catch (err) {
-    logger.error({err}, 'sendCommand threw error');
+    logger.error({err, message: err.message, stack: err.stack}, 'ws.send threw error');
   }
 }
 
