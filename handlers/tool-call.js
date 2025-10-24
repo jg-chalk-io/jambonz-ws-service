@@ -111,8 +111,8 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // Build new verb sequence and reply immediately
-  // This replaces the active LLM session
+  // Build new verb sequence and send with execImmediate to interrupt LLM
+  // This flushes the active LLM session and executes transfer immediately
   session
     .say({text: 'Please hold while I transfer you to our on-call team.'})
     .dial({
@@ -124,9 +124,9 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Transfer-Reason': reason
       }
     })
-    .reply();
+    .send({execImmediate: true});
 
-  logger.info({transferNumber, from, destination}, 'Transfer initiated with say + dial + reply');
+  logger.info({transferNumber, from, destination}, 'Transfer initiated with say + dial + send(execImmediate)');
 
   // Then respond to Ultravox to avoid timeout
   logger.info({tool_call_id}, 'Sending tool output to Ultravox');
@@ -195,10 +195,10 @@ async function handleHangUp(session, tool_call_id) {
     result: 'Call ending'
   });
 
-  // Hang up the call (replaces active LLM session)
+  // Hang up the call (interrupts active LLM session)
   session
     .hangup()
-    .reply();
+    .send({execImmediate: true});
 }
 
 module.exports = {handleToolCall};
