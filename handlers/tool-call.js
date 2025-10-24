@@ -111,28 +111,25 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  session.sendCommand('redirect', [
-    {
-      verb: 'say',
-      text: 'Please hold while I transfer you to our on-call team.'
-    },
-    {
-      verb: 'dial',
+  // IMPORTANT: Kill LLM session first, then redirect
+  // sendCommand('redirect') doesn't work during active LLM session
+  session.kill()
+    .say({text: 'Please hold while I transfer you to our on-call team.'})
+    .dial({
       callerId: outboundCallerId,
       answerOnBridge: true,
       target: dialTarget,
       // Add SIP headers to preserve caller context
-      // P-Asserted-Identity and Remote-Party-ID help Aircall show original caller
       sipHeaders: {
         'X-Original-Caller': from,
         'X-Transfer-Reason': reason,
         'P-Asserted-Identity': `<sip:${from.replace('+', '')}@${client.sip_domain || 'getvetwise.sip.jambonz.cloud'}>`,
         'Remote-Party-ID': `<sip:${from.replace('+', '')}@${client.sip_domain || 'getvetwise.sip.jambonz.cloud'}>;party=calling;privacy=off;screen=no`
       }
-    }
-  ]);
+    })
+    .reply();
 
-  logger.info({transferNumber, from, destination}, 'Transfer redirect command sent');
+  logger.info({transferNumber, from, destination}, 'Transfer command sent via kill() + reply()');
 
   // Then respond to Ultravox to avoid timeout
   logger.info({tool_call_id}, 'Sending tool output to Ultravox');
@@ -201,10 +198,10 @@ async function handleHangUp(session, tool_call_id) {
     result: 'Call ending'
   });
 
-  // Then hang up using redirect
-  session.sendCommand('redirect', [
-    {verb: 'hangup'}
-  ]);
+  // Kill LLM session and hang up
+  session.kill()
+    .hangup()
+    .reply();
 }
 
 module.exports = {handleToolCall};
