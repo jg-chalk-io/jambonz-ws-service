@@ -145,21 +145,19 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to call session.sendCommand');
 
-  try {
-    // Try calling ws.send directly to bypass sendCommand
-    const msg = {
-      type: 'command',
-      command: 'redirect',
-      queueCommand: false,
-      data: redirectVerbs
-    };
+  // Log the actual WebSocket object to debug
+  logger.info({
+    wsConstructor: session.ws?.constructor?.name,
+    wsUrl: session.ws?.url,
+    wsProtocol: session.ws?.protocol,
+    hasWs: !!session.ws,
+    wsKeys: session.ws ? Object.keys(session.ws) : []
+  }, 'WebSocket object details');
 
-    logger.info({msg: JSON.stringify(msg).substring(0, 200)}, 'About to call ws.send directly');
-    session.ws.send(JSON.stringify(msg));
-    logger.info({wsReadyState: session.ws?.readyState}, 'ws.send completed');
-  } catch (err) {
-    logger.error({err, message: err.message, stack: err.stack}, 'ws.send threw error');
-  }
+  // Try using session.sendCommand instead of direct ws.send
+  logger.info('Calling session.sendCommand with redirect verbs');
+  session.sendCommand('redirect', redirectVerbs);
+  logger.info('session.sendCommand returned successfully');
 }
 
 /**
