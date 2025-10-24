@@ -91,12 +91,6 @@ async function handleTransfer(session, tool_call_id, args) {
   // Execute the transfer by replacing active LLM session
   logger.info({transferNumber}, 'Executing transfer with say + dial verb sequence');
 
-  // Preserve original caller ID when transferring to Aircall via SIP
-  // Use the original caller's number so it shows up in Aircall
-  const outboundCallerId = from; // Use original caller's number
-
-  logger.info({outboundCallerId, originalCaller: from, transferNumber}, 'Transferring with original caller ID preserved');
-
   // Check if transfer destination is a SIP URI (Aircall) or phone number
   const isAircallSip = transferNumber && transferNumber.includes('@');
 
@@ -132,7 +126,8 @@ async function handleTransfer(session, tool_call_id, args) {
     {
       verb: 'dial',
       actionHook: '/dialComplete',
-      callerId: outboundCallerId,
+      // Removed callerId to use trunk's default - using original caller's number
+      // often gets rejected by SIP providers as potential spoofing
       answerOnBridge: true,
       target: dialTarget,
       headers: {
