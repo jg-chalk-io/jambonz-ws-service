@@ -145,15 +145,11 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to call session.sendCommand');
 
-  // Try using session.injectCommand instead of sendCommand
-  // injectCommand validates the command and uses a slightly different message structure
-  logger.info('Calling session.injectCommand with redirect verbs');
-  try {
-    session.injectCommand('redirect', redirectVerbs);
-    logger.info('session.injectCommand returned successfully');
-  } catch (err) {
-    logger.error({err, message: err.message, stack: err.stack}, 'injectCommand threw error');
-  }
+  // Use sendCommand with redirect verb array
+  // sendCommand accepts arrays, injectCommand expects objects
+  logger.info('Calling session.sendCommand with redirect verbs');
+  session.sendCommand('redirect', redirectVerbs);
+  logger.info('session.sendCommand returned successfully');
 }
 
 /**
