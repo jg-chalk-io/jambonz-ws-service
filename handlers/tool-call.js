@@ -121,7 +121,7 @@ async function handleTransfer(session, tool_call_id, args) {
   logger.info({tool_call_id}, 'Tool output sent to Ultravox');
 
   // Now send redirect command with array of verb objects
-  session.sendCommand('redirect', [
+  const redirectVerbs = [
     {
       verb: 'say',
       text: 'Please hold while I transfer you to our on-call team.'
@@ -136,9 +136,17 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Transfer-Reason': reason
       }
     }
-  ]);
+  ];
 
-  logger.info({transferNumber, from, destination}, 'Transfer initiated with sendCommand redirect');
+  logger.info({
+    redirectVerbs: JSON.stringify(redirectVerbs),
+    hasMethod: typeof session.sendCommand,
+    sessionKeys: Object.keys(session).join(',')
+  }, 'About to call session.sendCommand');
+
+  const result = session.sendCommand('redirect', redirectVerbs);
+
+  logger.info({result, transferNumber, from, destination}, 'sendCommand returned');
 }
 
 /**
