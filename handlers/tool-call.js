@@ -141,12 +141,16 @@ async function handleTransfer(session, tool_call_id, args) {
   logger.info({
     redirectVerbs: JSON.stringify(redirectVerbs),
     hasMethod: typeof session.sendCommand,
-    sessionKeys: Object.keys(session).join(',')
+    wsReadyState: session.ws?.readyState,
+    wsConnected: session.ws?.readyState === 1
   }, 'About to call session.sendCommand');
 
-  const result = session.sendCommand('redirect', redirectVerbs);
-
-  logger.info({result, transferNumber, from, destination}, 'sendCommand returned');
+  try {
+    const result = session.sendCommand('redirect', redirectVerbs);
+    logger.info({result, wsReadyState: session.ws?.readyState}, 'sendCommand returned');
+  } catch (err) {
+    logger.error({err}, 'sendCommand threw error');
+  }
 }
 
 /**
