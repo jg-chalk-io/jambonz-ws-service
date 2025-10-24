@@ -87,7 +87,10 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              client: {}
+              http: {
+                baseUrlPattern: process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app',
+                httpMethod: 'HTTP_METHOD_POST'
+              }
             }
           },
           {
@@ -123,7 +126,10 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              client: {}
+              http: {
+                baseUrlPattern: process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app',
+                httpMethod: 'HTTP_METHOD_POST'
+              }
             }
           }
         ]

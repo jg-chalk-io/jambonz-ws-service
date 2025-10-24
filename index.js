@@ -19,12 +19,54 @@ const logger = pino({
 const PORT = process.env.PORT || 3000;
 const WS_PATH = process.env.WS_PATH || '/ws';
 
-// Create HTTP server
-const server = http.createServer((req, res) => {
+// Create HTTP server with webhook endpoints for Ultravox HTTP tools
+const server = http.createServer(async (req, res) => {
+  // Parse request body for POST requests
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk.toString();
+  });
+
+  await new Promise(resolve => req.on('end', resolve));
+
+  // Handle routes
   if (req.url === '/health') {
     res.writeHead(200, {'Content-Type': 'application/json'});
     res.end(JSON.stringify({status: 'healthy', service: 'jambonz-ws-service'}));
-  } else {
+  }
+  else if (req.url === '/transferToOnCall' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(body);
+      logger.info({payload}, 'Received transferToOnCall HTTP tool call');
+
+      // Return success - the actual transfer logic needs access to the call session
+      // For now, just acknowledge receipt
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        result: 'Transfer request acknowledged'
+      }));
+    } catch (err) {
+      logger.error({err}, 'Error handling transferToOnCall');
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({error: err.message}));
+    }
+  }
+  else if (req.url === '/collectCallerInfo' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(body);
+      logger.info({payload}, 'Received collectCallerInfo HTTP tool call');
+
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        result: 'Caller information collected'
+      }));
+    } catch (err) {
+      logger.error({err}, 'Error handling collectCallerInfo');
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({error: err.message}));
+    }
+  }
+  else {
     res.writeHead(404);
     res.end();
   }
