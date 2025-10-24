@@ -118,14 +118,7 @@ async function handleTransfer(session, tool_call_id, args) {
     .dial({
       callerId: outboundCallerId,
       answerOnBridge: true,
-      target: dialTarget,
-      // Add SIP headers to preserve caller context
-      sipHeaders: {
-        'X-Original-Caller': from,
-        'X-Transfer-Reason': reason,
-        'P-Asserted-Identity': `<sip:${from.replace('+', '')}@${client.sip_domain || 'getvetwise.sip.jambonz.cloud'}>`,
-        'Remote-Party-ID': `<sip:${from.replace('+', '')}@${client.sip_domain || 'getvetwise.sip.jambonz.cloud'}>;party=calling;privacy=off;screen=no`
-      }
+      target: dialTarget
     })
     .reply();
 
