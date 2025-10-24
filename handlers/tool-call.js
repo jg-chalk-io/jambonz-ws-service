@@ -138,45 +138,42 @@ async function handleTransfer(session, tool_call_id, args) {
     wsConnected: session.ws?.readyState === 1
   }, 'About to execute transfer using chainable API');
 
-  // CRITICAL: Send tool output FIRST, then redirect
-  // Once redirect executes, the LLM session ends and we can't send tool output anymore
-  logger.info({tool_call_id}, 'Sending tool output to Ultravox BEFORE redirect');
+  // CRITICAL: Send redirect FIRST, then tool output
+  // Redirect must be sent while session is still active
+  // Tool output will be sent after redirect is queued
+  logger.info('Sending redirect command to interrupt LLM session');
 
+  // Use sendCommand('redirect') to interrupt the active LLM session
+  // This is the correct way to replace an active verb with new verbs
+  session.sendCommand('redirect', [
+    {
+      verb: 'say',
+      text: 'Please hold while I transfer you to our on-call team.'
+    },
+    {
+      verb: 'dial',
+      actionHook: '/dialComplete',
+      callerId: outboundCallerId,
+      answerOnBridge: true,
+      target: dialTarget,
+      headers: {
+        'X-Original-Caller': from,
+        'X-Transfer-Reason': reason
+      }
+    }
+  ]);
+
+  logger.info('Redirect sent, now sending tool output to Ultravox');
+
+  // Send tool output after redirect is queued
+  // This confirms to Ultravox that the transfer was initiated
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
-    result: 'Transferring now - please hold'
+    result: 'Transfer initiated'
   });
 
-  logger.info('Tool output sent, scheduling immediate redirect');
-
-  // Use minimal delay (100ms) to ensure tool output is sent, then redirect immediately
-  // This prevents Ultravox from speaking after the tool is invoked
-  setTimeout(() => {
-    logger.info('Executing redirect to interrupt LLM session');
-
-    // Use sendCommand('redirect') to interrupt the active LLM session
-    // This is the correct way to replace an active verb with new verbs
-    session.sendCommand('redirect', [
-      {
-        verb: 'say',
-        text: 'Please hold while I transfer you to our on-call team.'
-      },
-      {
-        verb: 'dial',
-        actionHook: '/dialComplete',
-        callerId: outboundCallerId,
-        answerOnBridge: true,
-        target: dialTarget,
-        headers: {
-          'X-Original-Caller': from,
-          'X-Transfer-Reason': reason
-        }
-      }
-    ]);
-
-    logger.info('Transfer redirect command sent to Jambonz');
-  }, 100);
+  logger.info('Tool output sent to Ultravox');
 }
 
 /**
