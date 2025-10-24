@@ -1,4 +1,8 @@
 require('dotenv').config();
+
+// Enable Jambonz SDK debug logging
+process.env.DEBUG = 'jambonz:*';
+
 const http = require('http');
 const {createEndpoint} = require('@jambonz/node-client-ws');
 const pino = require('pino');
