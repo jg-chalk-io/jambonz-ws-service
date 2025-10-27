@@ -92,8 +92,7 @@ async function handleIncomingCall(session) {
                   },
                   required: true
                 }
-              ],
-              client: {}
+              ]
             }
           }
         ]

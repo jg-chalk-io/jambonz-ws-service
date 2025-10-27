@@ -148,6 +148,37 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({error: err.message}));
     }
   }
+  else if (req.url === '/toolCall' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(body);
+      logger.info({payload}, 'Received /toolCall HTTP webhook from Ultravox');
+
+      const conversation_summary = payload.conversation_summary || 'Transfer requested';
+      const invocation_id = payload.invocationId || `http-${Date.now()}`;
+
+      // Hard-code transfer details
+      const transferNumber = '+13654001512';
+      const call_sid = payload.callId || 'unknown';
+
+      logger.info({conversation_summary, transferNumber, call_sid}, 'Executing transfer from HTTP tool');
+
+      // Return success to Ultravox immediately
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        result: 'Transfer initiated'
+      }));
+
+      // Execute transfer asynchronously
+      // NOTE: We don't have access to the WebSocket session from HTTP endpoint
+      // This is the fundamental limitation we need to solve
+      logger.warn('HTTP tool called but cannot access WebSocket session for dial execution');
+
+    } catch (err) {
+      logger.error({err}, 'Error handling /toolCall');
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({error: err.message}));
+    }
+  }
   else if (req.url === '/dial-specialist' && req.method === 'POST') {
     try {
       const payload = JSON.parse(body);
