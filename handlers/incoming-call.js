@@ -94,7 +94,7 @@ async function handleIncomingCall(session) {
                 }
               ],
               http: {
-                baseUrlPattern: `${process.env.BASE_URL}/transferToOnCall`,
+                baseUrlPattern: 'https://jambonz-ws-service-production.up.railway.app/transferToOnCall',
                 httpMethod: 'POST'
               }
             }

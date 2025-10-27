@@ -107,7 +107,7 @@ const server = http.createServer(async (req, res) => {
       setTimeout(() => {
         logger.info({transferNumber}, 'Dialing specialist');
 
-        const wsUri = `wss://${process.env.BASE_URL.replace('https://', '')}/dial-specialist`;
+        const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
 
         session.sendCommand('dial', [{
           target: [{
