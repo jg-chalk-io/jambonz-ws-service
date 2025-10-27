@@ -60,7 +60,6 @@ async function handleIncomingCall(session) {
       },
       actionHook: '/llmComplete',
       eventHook: '/llmEvent',
-      toolHook: '/toolCall',
       llmOptions: {
         systemPrompt,
         firstSpeaker: 'FIRST_SPEAKER_AGENT',
@@ -92,7 +91,8 @@ async function handleIncomingCall(session) {
                   },
                   required: true
                 }
-              ]
+              ],
+              client: {}
             }
           }
         ]
@@ -135,16 +135,12 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
 function getBusinessHoursPrompt() {
   return `You are a friendly AI assistant for a dental office.
 
-CRITICAL INSTRUCTIONS:
-1. Greet the caller briefly
-2. When they ask to transfer or speak to someone, you MUST:
-   - FIRST: Call the transferToOnCall tool with a brief conversation summary
-   - THEN: Tell them you're transferring them
-   - NEVER say you transferred them without actually calling the tool
+When the caller requests a transfer:
+1. Say "Let me transfer you to our on-call team now"
+2. Call the transferToOnCall tool with a brief summary
+3. The conversation will end after the tool call
 
-Example: "Let me transfer you now" then CALL THE TOOL.
-
-DO NOT say "you have been transferred" - just say "let me transfer you" and USE THE TOOL.`;
+Keep your responses brief and friendly.`;
 }
 
 function getAfterHoursPrompt() {
