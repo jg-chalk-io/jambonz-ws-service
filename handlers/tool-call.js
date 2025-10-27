@@ -109,7 +109,7 @@ async function handleTransfer(session, tool_call_id, args) {
 
     const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
 
-    session.sendCommand('dial', [{
+    session.sendCommand('dial', {
       target: dialTarget,
       wsUri,
       answerOnBridge: true,
@@ -118,7 +118,7 @@ async function handleTransfer(session, tool_call_id, args) {
         'X-Transfer-Reason': reason,
         'X-Queue': call_sid
       }
-    }]);
+    });
   }, 500);
 }
 

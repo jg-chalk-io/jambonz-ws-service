@@ -109,7 +109,7 @@ const server = http.createServer(async (req, res) => {
 
         const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
 
-        session.sendCommand('dial', [{
+        session.sendCommand('dial', {
           target: [{
             type: 'phone',
             number: transferNumber,
@@ -122,7 +122,7 @@ const server = http.createServer(async (req, res) => {
             'X-Transfer-Reason': conversation_summary,
             'X-Queue': call_sid
           }
-        }]);
+        });
       }, 500);
     } catch (err) {
       logger.error({err}, 'Error handling transferToOnCall');
