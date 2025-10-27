@@ -81,44 +81,45 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  // Transfer pattern based on jambonz/ultravox-transfer-call-example:
-  // 1. sendCommand('redirect', [...]) - immediately replaces LLM verb with say+dial
-  // 2. sendToolOutput() - confirms tool completion to Ultravox AFTER redirect
-  // This order prevents "invalid command since we are not in an llm" errors
-
-  logger.info('Executing redirect to replace LLM with transfer verbs');
-
-  session.sendCommand('redirect', [
-    {
-      verb: 'say',
-      text: 'Please hold while I transfer you to our on-call team.'
-    },
-    {
-      verb: 'dial',
-      actionHook: '/dialComplete',
-      // Removed callerId to use trunk's default - using original caller's number
-      // often gets rejected by SIP providers as potential spoofing
-      answerOnBridge: true,
-      target: dialTarget,
-      headers: {
-        'X-Original-Caller': from,
-        'X-Transfer-Reason': reason
-      }
-    }
-  ]);
-
-  logger.info('Redirect command sent to Jambonz');
-
-  // IMPORTANT: Send tool output AFTER redirect
-  // Based on jambonz/ultravox-transfer-call-example pattern
-  // This confirms to Ultravox that the tool executed successfully
+  // IMPORTANT: Send tool output FIRST (confirms to Ultravox)
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
     result: 'Transfer initiated'
   });
 
-  logger.info('Tool output sent to Ultravox - transfer complete');
+  logger.info('Tool output sent to Ultravox');
+
+  // Use enqueue pattern to keep caller on hold with music
+  // This prevents killing the Ultravox session with redirect
+  session
+    .say({text: 'Please hold while I transfer you to our on-call team.'})
+    .enqueue({
+      name: call_sid,
+      actionHook: '/consultationDone',
+      waitHook: '/wait-music'
+    })
+    .reply();
+
+  logger.info('Caller enqueued with hold music');
+
+  // Dial specialist on separate leg
+  setTimeout(() => {
+    logger.info({transferNumber}, 'Dialing specialist');
+
+    const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
+
+    session.sendCommand('dial', [{
+      target: dialTarget,
+      wsUri,
+      answerOnBridge: true,
+      customerData: {
+        'X-Original-Caller': from,
+        'X-Transfer-Reason': reason,
+        'X-Queue': call_sid
+      }
+    }]);
+  }, 500);
 }
 
 /**
