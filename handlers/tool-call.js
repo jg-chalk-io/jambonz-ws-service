@@ -55,69 +55,69 @@ async function handleTransfer(session, tool_call_id, args) {
   const {logger, client} = session.locals;
   const {call_sid, from} = session;
 
-  logger.info({args}, 'Executing transfer');
+  logger.info({args, call_sid, from}, 'handleTransfer CALLED - starting transfer execution');
 
   const reason = args.reason || args.conversation_summary || 'Customer requested transfer';
 
   // TEMPORARY: Hard-code transfer to 3654001512 for testing
   const transferNumber = '+13654001512';
 
+  logger.info({reason, transferNumber}, 'Transfer details extracted');
+
   // Mark call as transferred in database
   try {
     await CallLog.markTransferred(call_sid, transferNumber, reason);
+    logger.info('CallLog.markTransferred completed successfully');
   } catch (err) {
     logger.error({err}, 'Error marking call as transferred');
   }
 
-  // Execute the transfer by replacing active LLM session
-  logger.info({transferNumber}, 'Executing transfer with say + dial verb sequence');
-
-  // TEMPORARY: Always use voip.ms-jambonz trunk for testing
-  const dialTarget = [{
-    type: 'phone',
-    number: transferNumber,
-    trunk: 'voip.ms-jambonz'
-  }];
-
-  logger.info({dialTarget}, 'Using dial target configuration');
-
   // IMPORTANT: Send tool output FIRST (confirms to Ultravox)
-  session.sendToolOutput(tool_call_id, {
-    type: 'client_tool_result',
-    invocation_id: tool_call_id,
-    result: 'Transfer initiated'
-  });
-
-  logger.info('Tool output sent to Ultravox');
+  try {
+    session.sendToolOutput(tool_call_id, {
+      type: 'client_tool_result',
+      invocation_id: tool_call_id,
+      result: 'Transfer initiated'
+    });
+    logger.info('Tool output sent to Ultravox successfully');
+  } catch (err) {
+    logger.error({err}, 'Error sending tool output');
+  }
 
   // Use enqueue pattern to keep caller on hold with music
-  // This prevents killing the Ultravox session with redirect
-  session
-    .say({text: 'Please hold while I transfer you to our on-call team.'})
-    .enqueue({
-      name: call_sid,
-      actionHook: '/consultationDone',
-      waitHook: '/wait-music'
-    })
-    .reply();
-
-  logger.info('Caller enqueued with hold music');
+  try {
+    session
+      .say({text: 'Please hold while I transfer you to our on-call team.'})
+      .enqueue({
+        name: call_sid,
+        actionHook: '/consultationDone',
+        waitHook: '/wait-music'
+      })
+      .reply();
+    logger.info({call_sid}, 'Caller enqueued with hold music - reply() sent');
+  } catch (err) {
+    logger.error({err}, 'Error enqueuing caller');
+  }
 
   // Dial specialist on separate leg
-  // Based on ultravox-warm-transfer example
   setTimeout(() => {
-    logger.info({transferNumber}, 'Dialing specialist');
+    logger.info({transferNumber, call_sid, from}, 'EXECUTING DIAL NOW');
 
-    session.sendCommand('dial', {
-      call_hook: '/dial-specialist',
-      from: from,
-      to: transferNumber,
-      tag: {
-        conversation_summary: reason,
-        queue: call_sid,
-        original_caller: from
-      }
-    });
+    try {
+      session.sendCommand('dial', {
+        call_hook: '/dial-specialist',
+        from: from,
+        to: transferNumber,
+        tag: {
+          conversation_summary: reason,
+          queue: call_sid,
+          original_caller: from
+        }
+      });
+      logger.info('sendCommand(dial) executed successfully');
+    } catch (err) {
+      logger.error({err}, 'Error executing dial command');
+    }
   }, 500);
 }
 
