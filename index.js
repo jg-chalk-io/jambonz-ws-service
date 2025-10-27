@@ -53,14 +53,33 @@ const server = http.createServer(async (req, res) => {
       const payload = JSON.parse(body);
       logger.info({payload}, 'Received transferToOnCall HTTP tool call from Ultravox');
 
-      // Ultravox HTTP tools send: invocationId, parameters (conversation_summary), and callId
-      // The callId from Ultravox should match our Jambonz call_sid stored in metadata
-      const call_sid = payload.callId || payload.call_sid || payload.callSid || payload.metadata?.call_sid;
+      // Ultravox sends: invocationId, parameters, and call metadata
+      // We need the Jambonz call_sid to look up the WebSocket session
+      // Check multiple possible locations for call_sid
+      let call_sid = null;
+
+      // Try to get from query params (if sent that way)
+      if (req.url.includes('?')) {
+        const urlParams = new URLSearchParams(req.url.split('?')[1]);
+        call_sid = urlParams.get('call_sid');
+      }
+
+      // Try to get from request body
+      if (!call_sid) {
+        call_sid = payload.call_sid || payload.callSid || payload.parameters?.call_sid;
+      }
+
+      // Try to get from metadata (passed when creating Ultravox call)
+      if (!call_sid && payload.metadata) {
+        call_sid = payload.metadata.call_sid;
+      }
+
+      logger.info({call_sid, payload_keys: Object.keys(payload)}, 'Extracted call_sid from payload');
 
       if (!call_sid) {
-        logger.error({payload}, 'No call_sid/callId found in transferToOnCall payload');
+        logger.error({payload}, 'No call_sid found in any location of transferToOnCall payload');
         res.writeHead(400, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify({error: 'call_sid is required'}));
+        res.end(JSON.stringify({error: 'call_sid is required', received: payload}));
         return;
       }
 
