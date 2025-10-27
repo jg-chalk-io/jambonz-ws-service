@@ -104,25 +104,28 @@ const server = http.createServer(async (req, res) => {
         .reply();
 
       // Dial specialist on separate leg
+      // Use send() not sendCommand() after calling reply()
       setTimeout(() => {
         logger.info({transferNumber}, 'Dialing specialist');
 
         const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
 
-        session.sendCommand('dial', {
-          target: [{
-            type: 'phone',
-            number: transferNumber,
-            trunk: 'voip.ms-jambonz'
-          }],
-          wsUri,
-          answerOnBridge: true,
-          customerData: {
-            'X-Original-Caller': session.from,
-            'X-Transfer-Reason': conversation_summary,
-            'X-Queue': call_sid
-          }
-        });
+        session
+          .dial({
+            target: [{
+              type: 'phone',
+              number: transferNumber,
+              trunk: 'voip.ms-jambonz'
+            }],
+            wsUri,
+            answerOnBridge: true,
+            customerData: {
+              'X-Original-Caller': session.from,
+              'X-Transfer-Reason': conversation_summary,
+              'X-Queue': call_sid
+            }
+          })
+          .send();
       }, 500);
     } catch (err) {
       logger.error({err}, 'Error handling transferToOnCall');
