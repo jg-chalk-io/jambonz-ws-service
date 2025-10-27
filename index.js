@@ -51,13 +51,14 @@ const server = http.createServer(async (req, res) => {
   else if (req.url === '/transferToOnCall' && req.method === 'POST') {
     try {
       const payload = JSON.parse(body);
-      logger.info({payload}, 'Received transferToOnCall HTTP tool call');
+      logger.info({payload}, 'Received transferToOnCall HTTP tool call from Ultravox');
 
-      // Extract call_sid from payload (passed through metadata)
-      const call_sid = payload.call_sid || payload.callSid || payload.metadata?.call_sid;
+      // Ultravox HTTP tools send: invocationId, parameters (conversation_summary), and callId
+      // The callId from Ultravox should match our Jambonz call_sid stored in metadata
+      const call_sid = payload.callId || payload.call_sid || payload.callSid || payload.metadata?.call_sid;
 
       if (!call_sid) {
-        logger.error({payload}, 'No call_sid found in transferToOnCall payload');
+        logger.error({payload}, 'No call_sid/callId found in transferToOnCall payload');
         res.writeHead(400, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({error: 'call_sid is required'}));
         return;

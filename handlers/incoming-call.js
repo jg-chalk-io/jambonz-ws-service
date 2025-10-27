@@ -49,7 +49,9 @@ async function handleIncomingCall(session) {
   logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
 
   // Build LLM verb with Ultravox
-  // Using server-side tool handling via toolHook
+  // Using HTTP server-side tools - Ultravox calls our endpoint directly
+  const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
+
   session
     .pause({length: 0.5})
     .llm({
@@ -60,7 +62,6 @@ async function handleIncomingCall(session) {
       },
       actionHook: '/llmComplete',
       eventHook: '/llmEvent',
-      toolHook: '/toolCall',  // Server-side tool handling
       llmOptions: {
         systemPrompt,
         firstSpeaker: 'FIRST_SPEAKER_AGENT',
@@ -91,9 +92,29 @@ async function handleIncomingCall(session) {
                     description: 'Brief summary of the conversation'
                   },
                   required: true
+                },
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {
+                    type: 'string',
+                    description: 'Internal call identifier'
+                  },
+                  required: false
                 }
-              ]
-              // No client: {} - tools handled server-side via toolHook
+              ],
+              automaticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  knownValue: call_sid
+                }
+              ],
+              // HTTP server-side tool - Ultravox calls this endpoint
+              http: {
+                baseUrlPattern: `${baseUrl}/transferToOnCall`,
+                httpMethod: 'POST'
+              }
             }
           }
         ]
