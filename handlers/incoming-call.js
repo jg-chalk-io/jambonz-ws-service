@@ -94,8 +94,8 @@ async function handleIncomingCall(session) {
                 }
               ],
               http: {
-                url: `${process.env.BASE_URL}/transferToOnCall`,
-                method: 'POST'
+                baseUrlPattern: `${process.env.BASE_URL}/transferToOnCall`,
+                httpMethod: 'POST'
               }
             }
           }
