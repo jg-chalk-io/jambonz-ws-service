@@ -12,6 +12,7 @@ const {handleToolCall} = require('./handlers/tool-call');
 const {handleLlmComplete} = require('./handlers/llm-complete');
 const {handleLlmEvent} = require('./handlers/llm-event');
 const {handleCallStatus} = require('./handlers/call-status');
+const {handleOutboundDial} = require('./handlers/outbound-dial');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info'
@@ -110,6 +111,25 @@ const server = http.createServer(async (req, res) => {
       }));
     } catch (err) {
       logger.error({err}, 'Error handling collectCallerInfo');
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({error: err.message}));
+    }
+  }
+  else if (req.url === '/outbound-dial' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(body);
+      logger.info({payload}, 'Received outbound dial webhook from registered softphone');
+
+      // Use outbound-dial handler to generate dial verb response
+      handleOutboundDial({body: payload}, {
+        json: (data) => {
+          logger.info({response: data}, 'Sending outbound dial response');
+          res.writeHead(200, {'Content-Type': 'application/json'});
+          res.end(JSON.stringify(data));
+        }
+      });
+    } catch (err) {
+      logger.error({err}, 'Error handling outbound dial');
       res.writeHead(500, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({error: err.message}));
     }
