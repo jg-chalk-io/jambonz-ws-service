@@ -49,7 +49,7 @@ async function handleIncomingCall(session) {
   logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
 
   // Build LLM verb with Ultravox
-  // Using client: {} pattern from jambonz/ultravox-transfer-call-example
+  // Using server-side tool handling via toolHook
   session
     .pause({length: 0.5})
     .llm({
@@ -60,6 +60,7 @@ async function handleIncomingCall(session) {
       },
       actionHook: '/llmComplete',
       eventHook: '/llmEvent',
+      toolHook: '/toolCall',  // Server-side tool handling
       llmOptions: {
         systemPrompt,
         firstSpeaker: 'FIRST_SPEAKER_AGENT',
@@ -91,8 +92,8 @@ async function handleIncomingCall(session) {
                   },
                   required: true
                 }
-              ],
-              client: {}
+              ]
+              // No client: {} - tools handled server-side via toolHook
             }
           }
         ]
