@@ -73,27 +73,57 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Execute the transfer using the tool handler
-      logger.info({call_sid}, 'Executing transfer via HTTP tool');
-
-      // Call the handler with a synthetic tool_call_id
-      const tool_call_id = payload.invocation_id || `http-${Date.now()}`;
-      const args = {
-        destination: 'primary',
-        conversation_summary: payload.conversation_summary || 'Transfer requested via HTTP tool'
-      };
-
-      // Import and execute transfer handler
-      handleToolCall(session, {
-        name: 'transferToOnCall',
-        args,
-        tool_call_id
-      });
-
+      // Respond immediately to Ultravox (ends AI session, saves time/money)
       res.writeHead(200, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({
         result: 'Transfer initiated successfully'
       }));
+
+      // Execute the transfer using enqueue pattern (like ultravox-warm-transfer example)
+      logger.info({call_sid}, 'Executing transfer via HTTP tool with enqueue pattern');
+
+      const conversation_summary = payload.conversation_summary || 'Transfer requested';
+      const transferNumber = '+13654001512';
+
+      // Mark call as transferred in database
+      try {
+        const {CallLog} = require('./models/CallLog');
+        await CallLog.markTransferred(call_sid, transferNumber, conversation_summary);
+      } catch (err) {
+        logger.error({err}, 'Error marking call as transferred');
+      }
+
+      // Put caller in queue with hold music
+      session
+        .say({text: 'Please hold while I transfer you to our on-call team.'})
+        .enqueue({
+          name: call_sid,
+          actionHook: '/consultationDone',
+          waitHook: '/wait-music'
+        })
+        .reply();
+
+      // Dial specialist on separate leg
+      setTimeout(() => {
+        logger.info({transferNumber}, 'Dialing specialist');
+
+        const wsUri = `wss://${process.env.BASE_URL.replace('https://', '')}/dial-specialist`;
+
+        session.sendCommand('dial', [{
+          target: [{
+            type: 'phone',
+            number: transferNumber,
+            trunk: 'voip.ms-jambonz'
+          }],
+          wsUri,
+          answerOnBridge: true,
+          customerData: {
+            'X-Original-Caller': session.from,
+            'X-Transfer-Reason': conversation_summary,
+            'X-Queue': call_sid
+          }
+        }]);
+      }, 500);
     } catch (err) {
       logger.error({err}, 'Error handling transferToOnCall');
       res.writeHead(500, {'Content-Type': 'application/json'});
@@ -197,6 +227,20 @@ svc.on('session:new', async (session) => {
         // Respond with empty array to acknowledge
         session.reply([]);
       })
+      .on('/consultationDone', (evt) => {
+        logger.info({evt}, 'Received /consultationDone event - queue operation complete');
+        // Caller was dequeued and connected, or queue timed out
+        session.reply([]);
+      })
+      .on('/wait-music', (evt) => {
+        logger.info({evt}, 'Received /wait-music event - playing hold music');
+        // Play hold music while caller waits in queue
+        session.reply([{
+          verb: 'play',
+          url: 'https://www.kozco.com/tech/piano2.wav',
+          loop: true
+        }]);
+      })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
     // Handle incoming call with Ultravox AI
@@ -210,11 +254,71 @@ svc.on('session:new', async (session) => {
   }
 });
 
+// Create specialist WebSocket endpoint - handles outbound calls to human agents
+const specialistSvc = makeService({path: '/dial-specialist'});
+
+specialistSvc.on('session:new', async (session) => {
+  const {call_sid} = session;
+
+  session.locals = {
+    ...session.locals,
+    logger: logger.child({call_sid, role: 'specialist'})
+  };
+
+  session.locals.logger.info('Specialist call connected');
+
+  try {
+    // Extract queue name and conversation summary from customerData headers
+    const queueName = session.customerData?.['X-Queue'];
+    const conversationSummary = session.customerData?.['X-Transfer-Reason'];
+    const originalCaller = session.customerData?.['X-Original-Caller'];
+
+    session.locals.logger.info({queueName, conversationSummary}, 'Briefing specialist');
+
+    // Brief the specialist, then bridge to caller
+    session
+      .say({
+        text: `You have a transferred call from ${originalCaller}. ${conversationSummary}. Now connecting you to the caller.`
+      })
+      .dequeue({
+        name: queueName,
+        beep: true,
+        timeout: 2,
+        actionHook: '/dequeue'
+      })
+      .reply();
+
+    // Handle dequeue result
+    session.on('/dequeue', (evt) => {
+      session.locals.logger.info({evt}, 'Dequeue result');
+
+      if (evt.dequeueResult === 'timeout') {
+        session.locals.logger.info('Caller hung up before connection');
+        session
+          .say({text: 'Sorry, the caller hung up.'})
+          .hangup()
+          .reply();
+      }
+      // On success, calls are bridged automatically
+    });
+
+  } catch (err) {
+    session.locals.logger.error({err}, 'Error handling specialist call');
+    session
+      .say({text: 'Sorry, an error occurred.'})
+      .hangup()
+      .reply();
+  }
+});
+
+logger.info('Specialist WebSocket endpoint created at /dial-specialist');
+
 // Start server
 server.listen(PORT, () => {
   logger.info(`Jambonz WebSocket service listening on port ${PORT}`);
   logger.info(`Health check available at http://localhost:${PORT}/health`);
   logger.info(`WebSocket endpoint: ws://localhost:${PORT}${WS_PATH}`);
+  logger.info(`Specialist endpoint: ws://localhost:${PORT}/dial-specialist`);
 });
 
 // Graceful shutdown

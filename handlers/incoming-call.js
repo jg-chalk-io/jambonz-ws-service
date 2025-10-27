@@ -93,7 +93,10 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              client: {}
+              http: {
+                url: `${process.env.BASE_URL}/transferToOnCall`,
+                method: 'POST'
+              }
             }
           }
         ]
