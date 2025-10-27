@@ -81,50 +81,14 @@ async function handleIncomingCall(session) {
           {
             temporaryTool: {
               modelToolName: 'transferToOnCall',
-              description: 'Transfer urgent or emergency calls to on-call staff immediately',
+              description: 'Transfer the caller when they ask',
               dynamicParameters: [
                 {
                   name: 'conversation_summary',
                   location: 'PARAMETER_LOCATION_BODY',
                   schema: {
                     type: 'string',
-                    description: 'Brief summary of the conversation and reason for transfer'
-                  },
-                  required: true
-                }
-              ],
-              client: {}
-            }
-          },
-          {
-            temporaryTool: {
-              modelToolName: 'collectCallerInfo',
-              description: 'Collect caller information for non-urgent matters',
-              dynamicParameters: [
-                {
-                  name: 'caller_name',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {
-                    type: 'string',
-                    description: "Caller's full name"
-                  },
-                  required: true
-                },
-                {
-                  name: 'callback_number',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {
-                    type: 'string',
-                    description: 'Phone number for callback'
-                  },
-                  required: true
-                },
-                {
-                  name: 'concern_description',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  schema: {
-                    type: 'string',
-                    description: 'Description of their concern'
+                    description: 'Brief summary of the conversation'
                   },
                   required: true
                 }
@@ -170,29 +134,9 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
 }
 
 function getBusinessHoursPrompt() {
-  return `You are a professional receptionist for {{office_name}}. Your role is to handle incoming calls with courtesy and efficiency.
+  return `You are a friendly AI assistant. When the caller asks to be transferred, use the transferToOnCall tool immediately.
 
-CURRENT CONTEXT:
-- Office: {{office_name}}
-- Current time: {{current_time}} ({{day_of_week}})
-- Caller ID: ending in {{caller_phone_last4}}
-
-YOUR RESPONSIBILITIES:
-1. **Urgent/Emergency Calls**: If the caller indicates this is urgent, an emergency, or they need immediate assistance, use the transferToOnCall tool immediately
-2. **Non-Urgent Calls**: For routine matters, use collectCallerInfo tool to gather their name, callback number, and reason for calling
-3. **After Collection**: Once you've collected information OR transferred the call, use the hangUp tool to end the call politely
-
-IMPORTANT GUIDELINES:
-- Be warm, professional, and efficient
-- Listen carefully to determine urgency
-- Don't keep callers waiting - act quickly on their needs
-- Always confirm you've recorded their information correctly
-- Thank them for calling before hanging up
-
-TOOLS:
-- transferToOnCall: Use for urgent/emergency situations
-- collectCallerInfo: Use for routine inquiries (requires name, number, description)
-- hangUp: Use after handling the call to end it politely`;
+Keep it simple - just say hello and wait for them to ask for a transfer.`;
 }
 
 function getAfterHoursPrompt() {

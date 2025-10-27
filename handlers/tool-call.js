@@ -57,29 +57,10 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({args}, 'Executing transfer');
 
-  const destination = args.destination || 'primary';
-  const reason = args.reason || args.conversation_summary || 'Customer requested human agent';
+  const reason = args.reason || args.conversation_summary || 'Customer requested transfer';
 
-  // Get transfer phone number from client config
-  let transferNumber;
-  if (destination === 'primary') {
-    transferNumber = client.primary_transfer_number;
-  } else if (destination === 'secondary') {
-    transferNumber = client.secondary_transfer_number;
-  } else if (destination === 'voicemail') {
-    transferNumber = client.voicemail_number;
-  }
-
-  if (!transferNumber) {
-    logger.error({destination}, 'No transfer number configured for destination');
-    // Respond to Ultravox immediately with error
-    session.sendToolOutput(tool_call_id, {
-      type: 'client_tool_result',
-      invocation_id: tool_call_id,
-      error_message: 'No transfer number configured for this destination'
-    });
-    return;
-  }
+  // TEMPORARY: Hard-code transfer to 3654001512 for testing
+  const transferNumber = '+13654001512';
 
   // Mark call as transferred in database
   try {
@@ -91,16 +72,11 @@ async function handleTransfer(session, tool_call_id, args) {
   // Execute the transfer by replacing active LLM session
   logger.info({transferNumber}, 'Executing transfer with say + dial verb sequence');
 
-  // Check if transfer destination is a SIP URI (Aircall) or phone number
-  const isAircallSip = transferNumber && transferNumber.includes('@');
-
-  const dialTarget = isAircallSip ? [{
-    type: 'sip',
-    sipUri: transferNumber
-  }] : [{
+  // TEMPORARY: Always use voip.ms-jambonz trunk for testing
+  const dialTarget = [{
     type: 'phone',
     number: transferNumber,
-    trunk: client.sip_trunk_name || process.env.SIP_TRUNK_NAME || 'voip.ms-jambonz'
+    trunk: 'voip.ms-jambonz'
   }];
 
   logger.info({dialTarget}, 'Using dial target configuration');
