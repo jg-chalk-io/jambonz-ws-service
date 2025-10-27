@@ -100,7 +100,7 @@ async function handleTransfer(session, tool_call_id, args) {
   }] : [{
     type: 'phone',
     number: transferNumber,
-    trunk: client.sip_trunk_name || process.env.SIP_TRUNK_NAME
+    trunk: client.sip_trunk_name || process.env.SIP_TRUNK_NAME || 'voip.ms-jambonz'
   }];
 
   logger.info({dialTarget}, 'Using dial target configuration');

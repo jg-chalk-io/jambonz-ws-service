@@ -14,13 +14,13 @@ async function testSimpleTransfer(session) {
   logger.info({call_sid, from, to}, 'TEST: Simple cold transfer to 3654001512');
 
   // Immediate cold transfer - no LLM, no AI, just dial
-  // IMPORTANT: Specify trunk to route through VoIPms, not Twilio
+  // IMPORTANT: Use voip.ms-jambonz trunk (registered SIP trunk)
   session
     .dial({
       target: [{
         type: 'phone',
         number: '+13654001512',
-        trunk: process.env.SIP_TRUNK_NAME || 'VoIPms-Outbound'
+        trunk: 'voip.ms-jambonz'
       }],
       actionHook: '/dialComplete',
       answerOnBridge: true,
