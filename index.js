@@ -148,6 +148,41 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({error: err.message}));
     }
   }
+  else if (req.url === '/dial-specialist' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(body);
+      logger.info({payload}, 'Received dial-specialist webhook');
+
+      // Extract conversation context from tag
+      const conversation_summary = payload.tag?.conversation_summary || 'Transfer requested';
+      const queue = payload.tag?.queue;
+      const original_caller = payload.tag?.original_caller || payload.from;
+
+      logger.info({conversation_summary, queue, original_caller}, 'Briefing specialist');
+
+      // Return verbs: brief specialist, then dequeue caller
+      const response = [
+        {
+          verb: 'say',
+          text: `You have a transferred call from ${original_caller}. ${conversation_summary}. Now connecting you to the caller.`
+        },
+        {
+          verb: 'dequeue',
+          name: queue,
+          beep: true,
+          timeout: 2,
+          actionHook: '/dequeueResult'
+        }
+      ];
+
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify(response));
+    } catch (err) {
+      logger.error({err}, 'Error handling dial-specialist');
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({error: err.message}));
+    }
+  }
   else if (req.url === '/outbound-dial' && req.method === 'POST') {
     try {
       const payload = JSON.parse(body);

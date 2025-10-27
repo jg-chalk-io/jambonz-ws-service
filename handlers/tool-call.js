@@ -104,24 +104,20 @@ async function handleTransfer(session, tool_call_id, args) {
   logger.info('Caller enqueued with hold music');
 
   // Dial specialist on separate leg
-  // Use send() not sendCommand() after calling reply()
+  // Based on ultravox-warm-transfer example
   setTimeout(() => {
     logger.info({transferNumber}, 'Dialing specialist');
 
-    const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
-
-    session
-      .dial({
-        target: dialTarget,
-        wsUri,
-        answerOnBridge: true,
-        customerData: {
-          'X-Original-Caller': from,
-          'X-Transfer-Reason': reason,
-          'X-Queue': call_sid
-        }
-      })
-      .send();
+    session.sendCommand('dial', {
+      call_hook: '/dial-specialist',
+      from: from,
+      to: transferNumber,
+      tag: {
+        conversation_summary: reason,
+        queue: call_sid,
+        original_caller: from
+      }
+    });
   }, 500);
 }
 
