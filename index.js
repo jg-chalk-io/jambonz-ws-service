@@ -123,29 +123,23 @@ const server = http.createServer(async (req, res) => {
         })
         .reply();
 
-      // Dial specialist on separate leg
-      // Use send() not sendCommand() after calling reply()
+      // Dial specialist on separate leg using REST API
+      // sendCommand creates a NEW outbound call leg (not redirect)
       setTimeout(() => {
-        logger.info({transferNumber, call_sid}, 'Dialing specialist');
+        logger.info({transferNumber, call_sid, from: session.from}, 'Dialing specialist via REST API');
 
-        session
-          .dial({
-            target: [{
-              type: 'phone',
-              number: transferNumber,
-              trunk: 'voip.ms-jambonz'
-            }],
-            answerOnBridge: true,
-            actionHook: '/dialComplete',
-            tag: {
-              original_caller: session.from,
-              conversation_summary,
-              queue: call_sid
-            }
-          })
-          .send();
+        session.sendCommand('dial', {
+          call_hook: '/dial-specialist',
+          from: session.from,
+          to: transferNumber,
+          tag: {
+            original_caller: session.from,
+            conversation_summary,
+            queue: call_sid
+          }
+        });
 
-        logger.info('Dial command sent via .send()');
+        logger.info('Dial command sent via sendCommand (REST API)');
       }, 500);
     } catch (err) {
       logger.error({err}, 'Error handling transferToOnCall');
