@@ -72,6 +72,7 @@ async function handleIncomingCall(session) {
         model: 'fixie-ai/ultravox',
         voice: client.agent_voice || 'Jessica',
         transcriptOptional: true,
+        temperature: 0.1,
         // Include call metadata - all values must be strings for Ultravox
         metadata: {
           call_sid,
@@ -82,14 +83,14 @@ async function handleIncomingCall(session) {
           {
             temporaryTool: {
               modelToolName: 'transferToOnCall',
-              description: 'Transfer the caller when they ask',
+              description: 'IMMEDIATELY transfer caller to live agent when they say: transfer, agent, speak to someone, person, representative, human, help, emergency, or ask to talk to anyone. Call this tool - do not just say you will transfer.',
               dynamicParameters: [
                 {
                   name: 'conversation_summary',
                   location: 'PARAMETER_LOCATION_BODY',
                   schema: {
                     type: 'string',
-                    description: 'Brief summary of the conversation'
+                    description: 'Brief summary of what the caller said'
                   },
                   required: true
                 }
@@ -146,19 +147,14 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
 }
 
 function getBusinessHoursPrompt() {
-  return `You are a friendly AI assistant for a dental office.
+  return `You are a helpful dental office assistant.
 
-CRITICAL: When the caller asks to transfer or speak to someone:
-- You MUST call the transferToOnCall tool
-- Do NOT say you're transferring until AFTER calling the tool
-- Never pretend to transfer without calling the tool
-- The tool call is required - saying it doesn't count
+When caller asks to transfer, speak to someone, or needs help:
+1. Immediately call transferToOnCall tool with conversation summary
+2. Do NOT respond with words until AFTER calling the tool
+3. Tool call is REQUIRED - words alone don't transfer
 
-Tool usage:
-1. Call transferToOnCall(conversation_summary="brief summary")
-2. The call will end automatically after the tool executes
-
-Keep your responses brief and friendly.`;
+Be brief and call the tool when needed.`;
 }
 
 function getAfterHoursPrompt() {
