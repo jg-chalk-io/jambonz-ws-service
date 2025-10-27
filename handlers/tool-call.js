@@ -105,16 +105,10 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({dialTarget}, 'Using dial target configuration');
 
-  logger.info({
-    dialTarget: JSON.stringify(dialTarget),
-    wsReadyState: session.ws?.readyState,
-    wsConnected: session.ws?.readyState === 1
-  }, 'About to execute transfer - redirect immediately without tool output');
-
-  // CRITICAL FIX: Don't send tool output for transfers
-  // The redirect itself IS the tool execution - replacing LLM with dial
-  // Ultravox will see LLM session end and consider that tool completion
-  // Sending tool output causes race conditions and "not in an llm" errors
+  // Transfer pattern based on jambonz/ultravox-transfer-call-example:
+  // 1. sendCommand('redirect', [...]) - immediately replaces LLM verb with say+dial
+  // 2. sendToolOutput() - confirms tool completion to Ultravox AFTER redirect
+  // This order prevents "invalid command since we are not in an llm" errors
 
   logger.info('Executing redirect to replace LLM with transfer verbs');
 
@@ -137,7 +131,18 @@ async function handleTransfer(session, tool_call_id, args) {
     }
   ]);
 
-  logger.info('Redirect command sent to Jambonz - LLM session will end and dial will begin');
+  logger.info('Redirect command sent to Jambonz');
+
+  // IMPORTANT: Send tool output AFTER redirect
+  // Based on jambonz/ultravox-transfer-call-example pattern
+  // This confirms to Ultravox that the tool executed successfully
+  session.sendToolOutput(tool_call_id, {
+    type: 'client_tool_result',
+    invocation_id: tool_call_id,
+    result: 'Transfer initiated'
+  });
+
+  logger.info('Tool output sent to Ultravox - transfer complete');
 }
 
 /**

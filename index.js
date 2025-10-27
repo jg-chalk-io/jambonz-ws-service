@@ -7,6 +7,7 @@ const http = require('http');
 const {createEndpoint} = require('@jambonz/node-client-ws');
 const pino = require('pino');
 const {handleIncomingCall} = require('./handlers/incoming-call');
+const {testSimpleTransfer} = require('./test-simple-transfer');
 const {handleToolCall} = require('./handlers/tool-call');
 const {handleLlmComplete} = require('./handlers/llm-complete');
 const {handleLlmEvent} = require('./handlers/llm-event');
@@ -178,8 +179,10 @@ svc.on('session:new', async (session) => {
       })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
-    // Handle the incoming call and generate initial response
-    await handleIncomingCall(session);
+    // TEMPORARY TEST: Simple cold transfer to 3654001512
+    // This bypasses LLM to test basic dial functionality
+    // To restore normal operation, change back to: handleIncomingCall(session)
+    await testSimpleTransfer(session);
   } catch (err) {
     session.locals.logger.error({err}, 'Error handling new session');
     session
