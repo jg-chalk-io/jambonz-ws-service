@@ -199,10 +199,8 @@ svc.on('session:new', async (session) => {
       })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
-    // TEMPORARY TEST: Simple cold transfer to 3654001512
-    // This bypasses LLM to test basic dial functionality
-    // To restore normal operation, change back to: handleIncomingCall(session)
-    await testSimpleTransfer(session);
+    // Handle incoming call with Ultravox AI
+    await handleIncomingCall(session);
   } catch (err) {
     session.locals.logger.error({err}, 'Error handling new session');
     session
