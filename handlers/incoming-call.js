@@ -94,8 +94,14 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
+                }
+              ],
               // HTTP server-side tool - Ultravox calls this endpoint
-              // Ultravox automatically sends its callId in the request
               http: {
                 baseUrlPattern: `${baseUrl}/transferToOnCall`,
                 httpMethod: 'POST'
