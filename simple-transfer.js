@@ -1,9 +1,10 @@
 require('dotenv').config();
 const http = require('http');
 const {createEndpoint} = require('@jambonz/node-client-ws');
+const twilio = require('twilio');
 const pino = require('pino');
 const {loadAgentDefinition} = require('./shared/agent-config');
-const {createToolHandlers, createJambonzTransfer} = require('./shared/tool-handlers');
+const {createToolHandlers, createJambonzTransfer, createTwilioTransfer} = require('./shared/tool-handlers');
 
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3000;
@@ -13,20 +14,139 @@ const BASE_URL = process.env.BASE_URL || 'https://jambonz-ws-service-production.
 const TRANSFER_NUMBER = '+13654001512';  // Phone transfer until Aircall whitelists IP
 const TRANSFER_TRUNK = 'voip.ms-jambonz';
 
+// Initialize Twilio client (for Twilio transfer mode)
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
+
 // Create Jambonz-specific transfer function
-const executeTransfer = createJambonzTransfer(
+const executeJambonzTransfer = createJambonzTransfer(
   process.env.JAMBONZ_ACCOUNT_SID,
   process.env.JAMBONZ_API_KEY,
   logger
 );
 
+// Create Twilio-specific transfer function
+const executeTwilioTransfer = twilioClient
+  ? createTwilioTransfer(twilioClient, logger)
+  : null;
+
 // Create tool handlers with Jambonz transfer logic
-const toolHandlers = createToolHandlers({
-  executeTransfer,
+const jambonzToolHandlers = createToolHandlers({
+  executeTransfer: executeJambonzTransfer,
   logger,
   transferNumber: TRANSFER_NUMBER,
   transferTrunk: TRANSFER_TRUNK
 });
+
+// Create tool handlers with Twilio transfer logic
+const twilioToolHandlers = executeTwilioTransfer ? createToolHandlers({
+  executeTransfer: executeTwilioTransfer,
+  logger,
+  transferNumber: TRANSFER_NUMBER,
+  transferTrunk: null
+}) : null;
+
+/**
+ * Generate TwiML for incoming Twilio call with Ultravox connection
+ */
+function generateIncomingCallTwiML(from, to, callSid) {
+  const systemPrompt = loadAgentDefinition(from);
+
+  // Escape XML special characters in system prompt
+  const escapedPrompt = systemPrompt
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+  // Build tool definitions for Ultravox
+  const tools = [
+    {
+      temporaryTool: {
+        modelToolName: 'transferToOnCall',
+        description: 'Transfer caller to on-call veterinary technician for emergency situations',
+        dynamicParameters: [
+          {
+            name: 'urgency_reason',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {
+              type: 'string',
+              description: 'Brief description of the emergency situation'
+            },
+            required: true
+          }
+        ],
+        http: {
+          baseUrlPattern: `${BASE_URL}/twilio/transferToOnCall`,
+          httpMethod: 'POST'
+        },
+        staticParameters: [
+          {
+            name: 'call_sid',
+            location: 'PARAMETER_LOCATION_BODY',
+            value: callSid
+          }
+        ]
+      }
+    },
+    {
+      temporaryTool: {
+        modelToolName: 'collectCallerInfo',
+        description: 'Collect and store non-urgent call details',
+        dynamicParameters: [
+          {name: 'caller_name', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: true},
+          {name: 'pet_name', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: true},
+          {name: 'species', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: true},
+          {name: 'breed', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: false},
+          {name: 'callback_number', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: true},
+          {name: 'email', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: false},
+          {name: 'home_vet_hospital', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: false},
+          {name: 'concern_description', location: 'PARAMETER_LOCATION_BODY', schema: {type: 'string'}, required: true}
+        ],
+        http: {
+          baseUrlPattern: `${BASE_URL}/twilio/collectCallerInfo`,
+          httpMethod: 'POST'
+        },
+        staticParameters: [
+          {name: 'call_sid', location: 'PARAMETER_LOCATION_BODY', value: callSid}
+        ]
+      }
+    },
+    {
+      temporaryTool: {
+        modelToolName: 'hangUp',
+        description: 'End the call gracefully after completing the interaction',
+        dynamicParameters: [],
+        http: {
+          baseUrlPattern: `${BASE_URL}/twilio/hangUp`,
+          httpMethod: 'POST'
+        },
+        staticParameters: [
+          {name: 'call_sid', location: 'PARAMETER_LOCATION_BODY', value: callSid}
+        ]
+      }
+    }
+  ];
+
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="wss://api.ultravox.ai/stream">
+      <Parameter name="apiKey" value="${process.env.ULTRAVOX_API_KEY}" />
+      <Parameter name="systemPrompt" value="${escapedPrompt}" />
+      <Parameter name="voice" value="Jessica" />
+      <Parameter name="model" value="fixie-ai/ultravox" />
+      <Parameter name="temperature" value="0.1" />
+      <Parameter name="firstSpeaker" value="FIRST_SPEAKER_AGENT" />
+      <Parameter name="selectedTools" value="${JSON.stringify(tools).replace(/"/g, '&quot;')}" />
+    </Stream>
+  </Connect>
+</Response>`;
+
+  return twiml;
+}
 
 // Create HTTP server (handlers added below)
 const server = http.createServer();
@@ -213,7 +333,7 @@ svc.on('session:new', async (session) => {
   }
 });
 
-// Add HTTP routes for tool handlers (shared implementations)
+// Add HTTP routes for both Jambonz and Twilio
 server.on('request', (req, res) => {
   let body = '';
   req.on('data', chunk => {
@@ -222,23 +342,79 @@ server.on('request', (req, res) => {
 
   req.on('end', () => {
     try {
-      const data = body ? JSON.parse(body) : {};
+      logger.info({url: req.url, method: req.method}, 'Received request');
 
-      if (req.url === '/transferToOnCall' && req.method === 'POST') {
-        toolHandlers.handleTransferToOnCall(data, res);
+      // Parse body based on content type
+      let data = {};
+      const contentType = req.headers['content-type'] || '';
+
+      if (body) {
+        if (contentType.includes('application/x-www-form-urlencoded')) {
+          // Twilio sends form-encoded data
+          const params = new URLSearchParams(body);
+          data = Object.fromEntries(params);
+        } else {
+          // Ultravox HTTP tools send JSON
+          data = JSON.parse(body);
+        }
+      }
+
+      // Twilio routes
+      if (req.url === '/twilio/incoming' && req.method === 'POST') {
+        const {From, To, CallSid} = data;
+        logger.info({From, To, CallSid}, 'Twilio incoming call');
+
+        const twiml = generateIncomingCallTwiML(From, To, CallSid);
+
+        res.writeHead(200, {'Content-Type': 'text/xml'});
+        res.end(twiml);
+
+      } else if (req.url === '/twilio/transferToOnCall' && req.method === 'POST') {
+        if (!twilioToolHandlers) {
+          res.writeHead(500, {'Content-Type': 'application/json'});
+          res.end(JSON.stringify({error: 'Twilio not configured'}));
+          return;
+        }
+        twilioToolHandlers.handleTransferToOnCall(data, res);
+
+      } else if (req.url === '/twilio/collectCallerInfo' && req.method === 'POST') {
+        if (!twilioToolHandlers) {
+          res.writeHead(500, {'Content-Type': 'application/json'});
+          res.end(JSON.stringify({error: 'Twilio not configured'}));
+          return;
+        }
+        twilioToolHandlers.handleCollectCallerInfo(data, res);
+
+      } else if (req.url === '/twilio/hangUp' && req.method === 'POST') {
+        if (!twilioToolHandlers) {
+          res.writeHead(500, {'Content-Type': 'application/json'});
+          res.end(JSON.stringify({error: 'Twilio not configured'}));
+          return;
+        }
+        twilioToolHandlers.handleHangUp(data, res);
+
+      // Jambonz routes
+      } else if (req.url === '/transferToOnCall' && req.method === 'POST') {
+        jambonzToolHandlers.handleTransferToOnCall(data, res);
       } else if (req.url === '/collectCallerInfo' && req.method === 'POST') {
-        toolHandlers.handleCollectCallerInfo(data, res);
+        jambonzToolHandlers.handleCollectCallerInfo(data, res);
       } else if (req.url === '/hangUp' && req.method === 'POST') {
-        toolHandlers.handleHangUp(data, res);
+        jambonzToolHandlers.handleHangUp(data, res);
+
+      // Health check
       } else if (req.url === '/health') {
         res.writeHead(200, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify({status: 'healthy'}));
+        res.end(JSON.stringify({
+          status: 'healthy',
+          jambonz: true,
+          twilio: !!twilioClient
+        }));
       } else {
         res.writeHead(404);
         res.end();
       }
     } catch (err) {
-      logger.error({err}, 'Error parsing request');
+      logger.error({err}, 'Error handling request');
       res.writeHead(400);
       res.end(JSON.stringify({error: 'Bad request'}));
     }
@@ -247,8 +423,11 @@ server.on('request', (req, res) => {
 
 // Start server
 server.listen(PORT, () => {
-  logger.info(`Simple transfer service listening on port ${PORT}`);
-  logger.info(`WebSocket: ws://localhost:${PORT}/ws`);
+  logger.info(`Unified service listening on port ${PORT}`);
+  logger.info(`Jambonz WebSocket: ws://localhost:${PORT}/ws`);
+  if (twilioClient) {
+    logger.info(`Twilio HTTP: ${BASE_URL}/twilio/incoming`);
+  }
 });
 
 // Graceful shutdown
