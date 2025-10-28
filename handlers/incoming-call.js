@@ -98,8 +98,19 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              // TEMPORARILY REVERTED TO CLIENT-SIDE for debugging
-              client: {}
+              // HTTP tool - Ultravox calls HTTP endpoint directly, AI session ends immediately
+              // This allows enqueue hold music to play instead of AI continuing to speak
+              http: {
+                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/transferToOnCall`,
+                httpMethod: 'POST'
+              },
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
+                }
+              ]
             }
           }
         ]
