@@ -84,18 +84,24 @@ async function handleTransfer(session, tool_call_id, args) {
     .then(() => logger.info('CallLog.markTransferred completed successfully'))
     .catch(err => logger.error({err}, 'Error marking call as transferred'));
 
-  // Enqueue caller - no waitHook per Jambonz pattern (music handled differently)
+  // Redirect call away from LLM to enqueue pattern
+  // Using sendCommand('redirect') to replace LLM verb execution
   try {
-    session
-      .say({text: 'Please hold while I transfer you to our on-call team.'})
-      .enqueue({
+    session.sendCommand('redirect', [
+      {
+        verb: 'say',
+        text: 'Please hold while I transfer you to our on-call team.'
+      },
+      {
+        verb: 'enqueue',
         name: call_sid,
-        actionHook: '/consultationDone'
-      })
-      .send();
-    logger.info({call_sid}, 'Caller enqueued');
+        actionHook: '/consultationDone',
+        waitHook: '/wait-music'
+      }
+    ]);
+    logger.info({call_sid}, 'Call redirected to enqueue pattern');
   } catch (err) {
-    logger.error({err}, 'Error enqueuing caller');
+    logger.error({err}, 'Error redirecting to enqueue');
     return;
   }
 
