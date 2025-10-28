@@ -114,25 +114,30 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist using sendCommand REST API
-  // sendCommand requires: call_hook (HTTP webhook), to (phone number), from (optional)
-  // NOTE: call_hook must return JSON verbs, NOT WebSocket connection
+  // Dial specialist using sendCommand
+  // sendCommand signature: sendCommand(command, call_sid, verbs_array)
+  // We use 'redirect' command with dial verb to create outbound call
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      // sendCommand dial format - call_hook is HTTP POST endpoint
-      session.sendCommand('dial', {
-        call_hook: '/dial-specialist',  // HTTP webhook that returns dial verb
-        to: transferNumber,
-        // No 'from' - let trunk use default caller ID
+      // sendCommand expects: (command, call_sid, [verb objects])
+      session.sendCommand('redirect', call_sid, [{
+        verb: 'dial',
+        actionHook: '/dial-specialist',
+        answerOnBridge: true,
+        target: [{
+          type: 'phone',
+          number: transferNumber,
+          trunk: 'voip.ms-jambonz'
+        }],
         tag: {
           original_caller: from,
           conversation_summary: reason,
           queue: call_sid
         }
-      });
-      console.log('=== EMERGENCY DEBUG: Dial command sent ===', {call_hook: '/dial-specialist', to: transferNumber});
-      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial command sent');
+      }]);
+      console.log('=== EMERGENCY DEBUG: Dial command sent ===', {call_sid, transferNumber});
+      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial redirect sent');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
