@@ -49,74 +49,9 @@ async function handleIncomingCall(session) {
   logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
 
   // Build LLM verb with Ultravox
-  // Using CLIENT-SIDE tools - Ultravox sends WebSocket message to our handler
-  // This pattern matches the working jambonz ultravox-transfer-call-example
-
-  // Tool call handler - invoked when AI calls ANY client-side tool
-  // Event is sent to /toolCall webhook, evt.name identifies which tool
-  session.on('/toolCall', async (evt) => {
-    const {logger} = session.locals;
-    logger.info({evt, call_sid}, 'Tool call received from Ultravox');
-
-    // Only handle transferToOnCall tool
-    if (evt.name !== 'transferToOnCall') {
-      logger.warn({tool_name: evt.name}, 'Unknown tool called');
-      return;
-    }
-
-    try {
-      const transfer_reason = evt.args?.transfer_reason || 'other';
-      const transferNumber = '+13654001512';
-
-      logger.info({transfer_reason, transferNumber, call_sid}, 'Executing transfer via client-side tool');
-
-      // CRITICAL: Respond to tool invocation IMMEDIATELY (Ultravox timeout is 2.5s default)
-      session.sendToolOutput(evt.tool_call_id, {
-        type: 'client_tool_result',
-        invocation_id: evt.tool_call_id,
-        result: 'Transfer initiated successfully'
-      });
-
-      // Now do async operations (database, transfer) without blocking tool response
-      // Mark call as transferred in database (async, non-blocking)
-      CallLog.markTransferred(call_sid, transferNumber, `Transfer reason: ${transfer_reason}`)
-        .catch(err => logger.error({err}, 'Error marking call as transferred'));
-
-      // Execute transfer using enqueue/dequeue pattern
-      session
-        .say({text: 'Please hold while I transfer you to our on-call team.'})
-        .enqueue({
-          name: call_sid,
-          actionHook: '/consultationDone',
-          waitHook: '/wait-music'
-        })
-        .reply();
-
-      // Dial specialist on separate leg
-      setTimeout(() => {
-        logger.info({transferNumber, call_sid, from: session.from}, 'Dialing specialist');
-
-        session.sendCommand('dial', {
-          call_hook: '/dial-specialist',
-          from: session.from,
-          to: transferNumber,
-          tag: {
-            original_caller: session.from,
-            transfer_reason,
-            queue: call_sid
-          }
-        });
-      }, 500);
-
-    } catch (err) {
-      logger.error({err, call_sid}, 'Error handling transferToOnCall tool call');
-      session.sendToolOutput(evt.tool_call_id, {
-        type: 'client_tool_result',
-        invocation_id: evt.tool_call_id,
-        error_message: err.message
-      });
-    }
-  });
+  // Using CLIENT-SIDE tools - Ultravox sends WebSocket message to handler
+  // Tool calls are handled by /toolCall event registered in index.js
+  // See handlers/tool-call.js for implementation
 
   session
     .pause({length: 0.5})
@@ -163,7 +98,7 @@ async function handleIncomingCall(session) {
                 }
               ],
               // CLIENT-SIDE tool - Ultravox sends WebSocket message
-              // Handled by session.on('/toolCall', ...) above
+              // Handled by /toolCall event in index.js → handlers/tool-call.js
               // NO HTTP config, NO staticParameters - this triggers WebSocket flow
               client: {}
             }

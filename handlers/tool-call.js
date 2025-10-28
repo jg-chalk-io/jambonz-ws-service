@@ -57,22 +57,14 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({args, call_sid, from}, 'handleTransfer CALLED - starting transfer execution');
 
-  const reason = args.reason || args.conversation_summary || 'Customer requested transfer';
+  const reason = args.reason || args.transfer_reason || args.conversation_summary || 'Customer requested transfer';
 
   // TEMPORARY: Hard-code transfer to 3654001512 for testing
   const transferNumber = '+13654001512';
 
   logger.info({reason, transferNumber}, 'Transfer details extracted');
 
-  // Mark call as transferred in database
-  try {
-    await CallLog.markTransferred(call_sid, transferNumber, reason);
-    logger.info('CallLog.markTransferred completed successfully');
-  } catch (err) {
-    logger.error({err}, 'Error marking call as transferred');
-  }
-
-  // IMPORTANT: Send tool output FIRST (confirms to Ultravox)
+  // CRITICAL: Send tool output FIRST (confirms to Ultravox) - MUST be before ANY async operations
   try {
     session.sendToolOutput(tool_call_id, {
       type: 'client_tool_result',
@@ -83,6 +75,11 @@ async function handleTransfer(session, tool_call_id, args) {
   } catch (err) {
     logger.error({err}, 'Error sending tool output');
   }
+
+  // Mark call as transferred in database (async, non-blocking)
+  CallLog.markTransferred(call_sid, transferNumber, reason)
+    .then(() => logger.info('CallLog.markTransferred completed successfully'))
+    .catch(err => logger.error({err}, 'Error marking call as transferred'));
 
   // Use enqueue pattern to keep caller on hold with music
   try {
