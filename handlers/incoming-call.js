@@ -52,22 +52,29 @@ async function handleIncomingCall(session) {
   // Using CLIENT-SIDE tools - Ultravox sends WebSocket message to our handler
   // This pattern matches the working jambonz ultravox-transfer-call-example
 
-  // Tool call handler - invoked when AI calls the transferToOnCall tool
-  session.on('transferToOnCall', async (evt) => {
+  // Tool call handler - invoked when AI calls ANY client-side tool
+  // Event is sent to /toolCall webhook, evt.name identifies which tool
+  session.on('/toolCall', async (evt) => {
     const {logger} = session.locals;
     logger.info({evt, call_sid}, 'Tool call received from Ultravox');
 
+    // Only handle transferToOnCall tool
+    if (evt.name !== 'transferToOnCall') {
+      logger.warn({tool_name: evt.name}, 'Unknown tool called');
+      return;
+    }
+
     try {
-      const {params} = evt;
-      const transfer_reason = params?.transfer_reason || 'other';
+      const transfer_reason = evt.args?.transfer_reason || 'other';
       const transferNumber = '+13654001512';
 
       logger.info({transfer_reason, transferNumber, call_sid}, 'Executing transfer via client-side tool');
 
       // CRITICAL: Respond to tool invocation IMMEDIATELY (Ultravox timeout is 2.5s default)
-      session.sendToolOutput({
-        invocationId: evt.invocationId,
-        result: {status: 'success', message: 'Transfer initiated'}
+      session.sendToolOutput(evt.tool_call_id, {
+        type: 'client_tool_result',
+        invocation_id: evt.tool_call_id,
+        result: 'Transfer initiated successfully'
       });
 
       // Now do async operations (database, transfer) without blocking tool response
@@ -103,9 +110,10 @@ async function handleIncomingCall(session) {
 
     } catch (err) {
       logger.error({err, call_sid}, 'Error handling transferToOnCall tool call');
-      session.sendToolOutput({
-        invocationId: evt.invocationId,
-        result: {status: 'error', message: err.message}
+      session.sendToolOutput(evt.tool_call_id, {
+        type: 'client_tool_result',
+        invocation_id: evt.tool_call_id,
+        error_message: err.message
       });
     }
   });
