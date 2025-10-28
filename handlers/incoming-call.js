@@ -99,12 +99,74 @@ async function handleIncomingCall(session) {
                 }
               ],
               // HTTP tool - Ultravox recommended for telephony integration
-              // Ends AI session immediately (saves money), prevents continued speaking
               http: {
                 baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/transferToOnCall`,
                 httpMethod: 'POST'
               },
-              // Pass call_sid via static parameters so HTTP endpoint can look up session
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
+                }
+              ]
+            }
+          },
+          {
+            temporaryTool: {
+              modelToolName: 'collectCallerInfo',
+              description: 'Collect caller information when office is closed or caller cannot be transferred immediately.',
+              dynamicParameters: [
+                {
+                  name: 'caller_name',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {
+                    type: 'string',
+                    description: 'Full name of the caller'
+                  },
+                  required: true
+                },
+                {
+                  name: 'callback_number',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {
+                    type: 'string',
+                    description: 'Phone number to call back'
+                  },
+                  required: true
+                },
+                {
+                  name: 'concern_description',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {
+                    type: 'string',
+                    description: 'Description of their concern or reason for calling'
+                  },
+                  required: true
+                }
+              ],
+              http: {
+                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/collectCallerInfo`,
+                httpMethod: 'POST'
+              },
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
+                }
+              ]
+            }
+          },
+          {
+            temporaryTool: {
+              modelToolName: 'hangUp',
+              description: 'End the call gracefully after completing the interaction.',
+              dynamicParameters: [],
+              http: {
+                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/hangUp`,
+                httpMethod: 'POST'
+              },
               staticParameters: [
                 {
                   name: 'call_sid',

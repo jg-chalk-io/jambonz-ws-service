@@ -160,14 +160,100 @@ const server = http.createServer(async (req, res) => {
   else if (req.url === '/collectCallerInfo' && req.method === 'POST') {
     try {
       const payload = JSON.parse(body);
-      logger.info({payload}, 'Received collectCallerInfo HTTP tool call');
+      logger.info({payload}, 'Received collectCallerInfo HTTP tool call from Ultravox');
 
+      // Extract call_sid
+      let call_sid = payload.call_sid || payload.parameters?.call_sid;
+      if (!call_sid) {
+        logger.error({payload}, 'No call_sid found in collectCallerInfo payload');
+        res.writeHead(400, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({error: 'call_sid is required'}));
+        return;
+      }
+
+      // Look up session
+      const session = activeSessions.get(call_sid);
+      if (!session) {
+        logger.error({call_sid}, 'No active session found for call_sid');
+        res.writeHead(404, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({error: 'Session not found'}));
+        return;
+      }
+
+      // Extract caller information
+      const caller_name = payload.caller_name || payload.parameters?.caller_name || 'Unknown';
+      const callback_number = payload.callback_number || payload.parameters?.callback_number || session.from;
+      const concern_description = payload.concern_description || payload.parameters?.concern_description || 'No details provided';
+
+      logger.info({caller_name, callback_number, concern_description}, 'Caller info collected');
+
+      // Respond immediately to Ultravox (ends AI session)
       res.writeHead(200, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({
-        result: 'Caller information collected'
+        result: `Information recorded for ${caller_name}. We'll call you back during business hours.`
       }));
+
+      // Store in database (async, non-blocking)
+      const {CallLog} = require('./models/CallLog');
+      CallLog.updateStatus(call_sid, 'info_collected', {
+        caller_name,
+        callback_number,
+        concern_description
+      })
+        .then(() => logger.info('Caller info stored successfully'))
+        .catch(err => logger.error({err}, 'Error storing caller info'));
+
     } catch (err) {
       logger.error({err}, 'Error handling collectCallerInfo');
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({error: err.message}));
+    }
+  }
+  else if (req.url === '/hangUp' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(body);
+      logger.info({payload}, 'Received hangUp HTTP tool call from Ultravox');
+
+      // Extract call_sid
+      let call_sid = payload.call_sid || payload.parameters?.call_sid;
+      if (!call_sid) {
+        logger.error({payload}, 'No call_sid found in hangUp payload');
+        res.writeHead(400, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({error: 'call_sid is required'}));
+        return;
+      }
+
+      // Look up session
+      const session = activeSessions.get(call_sid);
+      if (!session) {
+        logger.error({call_sid}, 'No active session found for call_sid');
+        res.writeHead(404, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({error: 'Session not found'}));
+        return;
+      }
+
+      // Respond immediately to Ultravox (ends AI session)
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        result: 'Call ending'
+      }));
+
+      // Update database status (async, non-blocking)
+      const {CallLog} = require('./models/CallLog');
+      CallLog.updateStatus(call_sid, 'completed')
+        .catch(err => logger.error({err}, 'Error updating call status'));
+
+      // Hang up the call
+      session.sendCommand('redirect', [
+        {
+          verb: 'hangup'
+        }
+      ]);
+
+      logger.info({call_sid}, 'Call hung up via HTTP tool');
+
+    } catch (err) {
+      logger.error({err}, 'Error handling hangUp');
       res.writeHead(500, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({error: err.message}));
     }
