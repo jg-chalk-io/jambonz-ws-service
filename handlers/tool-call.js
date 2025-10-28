@@ -13,37 +13,40 @@ async function handleToolCall(session, evt) {
 
   logger.info({tool: name, args, tool_call_id}, 'Tool call received');
 
-  try {
-    // Route to appropriate tool handler
-    switch (name) {
-      case 'transferToOnCall':
-      case 'transfer_to_human':
-        await handleTransfer(session, tool_call_id, args);
-        break;
-
-      case 'collectCallerInfo':
-        await handleCollectCallerInfo(session, tool_call_id, args);
-        break;
-
-      case 'hangUp':
-        await handleHangUp(session, tool_call_id);
-        break;
-
-      default:
-        logger.warn({tool: name}, 'Unknown tool called');
+  // Route to appropriate tool handler
+  // CRITICAL: Don't await - let handlers run async since they sendToolOutput immediately
+  switch (name) {
+    case 'transferToOnCall':
+    case 'transfer_to_human':
+      handleTransfer(session, tool_call_id, args).catch(err => {
+        logger.error({err, tool: name}, 'Error in handleTransfer');
         session.sendToolOutput(tool_call_id, {
           type: 'client_tool_result',
           invocation_id: tool_call_id,
-          error_message: `Unknown tool: ${name}`
+          error_message: err.message
         });
-    }
-  } catch (err) {
-    logger.error({err, tool: name}, 'Error handling tool call');
-    session.sendToolOutput(tool_call_id, {
-      type: 'client_tool_result',
-      invocation_id: tool_call_id,
-      error_message: err.message
-    });
+      });
+      break;
+
+    case 'collectCallerInfo':
+      handleCollectCallerInfo(session, tool_call_id, args).catch(err => {
+        logger.error({err, tool: name}, 'Error in handleCollectCallerInfo');
+      });
+      break;
+
+    case 'hangUp':
+      handleHangUp(session, tool_call_id).catch(err => {
+        logger.error({err, tool: name}, 'Error in handleHangUp');
+      });
+      break;
+
+    default:
+      logger.warn({tool: name}, 'Unknown tool called');
+      session.sendToolOutput(tool_call_id, {
+        type: 'client_tool_result',
+        invocation_id: tool_call_id,
+        error_message: `Unknown tool: ${name}`
+      });
   }
 }
 
