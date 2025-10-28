@@ -133,25 +133,23 @@ async function handleCollectCallerInfo(session, tool_call_id, args) {
     concern: concern_description
   }, 'Caller info collected');
 
-  // Store in database (could add a caller_info table or update call_logs)
-  try {
-    await CallLog.updateStatus(call_sid, 'info_collected', {
-      caller_name,
-      callback_number,
-      concern_description
-    });
-  } catch (err) {
-    logger.error({err}, 'Error storing caller info');
-  }
-
-  // Respond immediately to Ultravox
+  // CRITICAL: Respond immediately to Ultravox FIRST
   session.sendToolOutput(tool_call_id, {
     type: 'client_tool_result',
     invocation_id: tool_call_id,
     result: `Information recorded for ${caller_name}`
   });
 
-  logger.info('Caller info stored and confirmed to AI');
+  // Store in database (async, non-blocking)
+  CallLog.updateStatus(call_sid, 'info_collected', {
+    caller_name,
+    callback_number,
+    concern_description
+  })
+    .then(() => logger.info('Caller info stored successfully'))
+    .catch(err => logger.error({err}, 'Error storing caller info'));
+
+  logger.info('Caller info confirmed to AI, DB update running in background');
 }
 
 /**
@@ -163,12 +161,6 @@ async function handleHangUp(session, tool_call_id) {
 
   logger.info('Hanging up call');
 
-  try {
-    await CallLog.updateStatus(call_sid, 'completed');
-  } catch (err) {
-    logger.error({err}, 'Error updating call status');
-  }
-
   // CRITICAL: Send tool output FIRST, then hang up
   // Once hangup executes, we can't send tool output anymore
   session.sendToolOutput(tool_call_id, {
@@ -176,6 +168,10 @@ async function handleHangUp(session, tool_call_id) {
     invocation_id: tool_call_id,
     result: 'Call ending'
   });
+
+  // Update database status (async, non-blocking)
+  CallLog.updateStatus(call_sid, 'completed')
+    .catch(err => logger.error({err}, 'Error updating call status'));
 
   // Now hang up the call
   session.sendCommand('redirect', [

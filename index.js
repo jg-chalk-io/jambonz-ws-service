@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 // Enable Jambonz SDK debug logging
-process.env.DEBUG = 'jambonz:*';
+// process.env.DEBUG = 'jambonz:*';  // DISABLED: Causes service to hang from excessive log volume
 
 const http = require('http');
 const {createEndpoint} = require('@jambonz/node-client-ws');
