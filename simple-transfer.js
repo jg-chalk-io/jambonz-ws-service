@@ -6,9 +6,9 @@ const pino = require('pino');
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3000;
 
-// Simple transfer number - change this to your destination
-const TRANSFER_NUMBER = '+13654001512';
-const TRANSFER_TRUNK = 'voip.ms-jambonz';
+// Aircall SIP transfer configuration
+const AIRCALL_SIP_URI = 'sip:13652972501@aircall-custom.sip.us1.twilio.com';
+const TRANSFER_DESTINATION = 'Aircall';
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
@@ -128,15 +128,14 @@ function handleTransferTool(session, evt) {
         callerId: session.from,
         target: [
           {
-            type: 'phone',
-            number: TRANSFER_NUMBER,
-            trunk: TRANSFER_TRUNK
+            type: 'sip',
+            sipUri: AIRCALL_SIP_URI
           }
         ]
       }
     ]);
 
-    logger.info({number: TRANSFER_NUMBER}, 'Transfer redirect sent');
+    logger.info({sipUri: AIRCALL_SIP_URI, destination: TRANSFER_DESTINATION}, 'Transfer redirect sent to Aircall');
 
   } catch (err) {
     logger.error({err}, 'Error executing transfer');
