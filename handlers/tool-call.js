@@ -116,16 +116,12 @@ async function handleTransfer(session, tool_call_id, args) {
 
   // Dial specialist using REST API with correct Jambonz payload structure
   // NOTE: No 'from' parameter - VoIP.ms requires verified caller IDs
+  // NOTE: call_hook is a STRING path, not object (for sendCommand API)
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
-
       session.sendCommand('dial', {
-        call_hook: {
-          url: `${baseUrl}/dial-specialist`,
-          method: 'POST'
-        },
+        call_hook: '/dial-specialist',  // STRING path for sendCommand (not object!)
         // No 'from' - use trunk default caller ID (VoIP.ms requires verified IDs)
         to: {
           type: 'phone',
@@ -137,8 +133,8 @@ async function handleTransfer(session, tool_call_id, args) {
           queue: call_sid
         }
       });
-      console.log('=== EMERGENCY DEBUG: Dial sent - using trunk default caller ID ===');
-      logger.info({transferNumber, call_sid, originalCaller: from, baseUrl}, 'Specialist dial sent (trunk default caller ID)');
+      console.log('=== EMERGENCY DEBUG: Dial command sent with call_hook=/dial-specialist ===');
+      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial sent (call_hook=/dial-specialist)');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
