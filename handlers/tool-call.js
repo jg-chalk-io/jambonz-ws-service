@@ -114,22 +114,30 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist using REST API (simpler than WebSocket endpoint)
+  // Dial specialist using REST API with correct Jambonz payload structure
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
+      const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
+
       session.sendCommand('dial', {
-        call_hook: '/dial-specialist',
+        call_hook: {
+          url: `${baseUrl}/dial-specialist`,
+          method: 'POST'
+        },
         from: from,
-        to: transferNumber,
+        to: {
+          type: 'phone',
+          number: transferNumber
+        },
         tag: {
           original_caller: from,
           conversation_summary: reason,
           queue: call_sid
         }
       });
-      console.log('=== EMERGENCY DEBUG: Dial command sent via REST API ===');
-      logger.info({transferNumber, call_sid, from}, 'Specialist dial command sent via REST API');
+      console.log('=== EMERGENCY DEBUG: Dial command sent via REST API with correct payload ===');
+      logger.info({transferNumber, call_sid, from, baseUrl}, 'Specialist dial command sent via REST API');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
