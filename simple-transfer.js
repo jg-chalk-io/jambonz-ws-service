@@ -23,9 +23,9 @@ const server = http.createServer((req, res) => {
 
 // Create WebSocket endpoint
 const makeService = createEndpoint({server});
-const svc = makeService({path: '/simple-transfer'});
+const svc = makeService({path: '/ws'});
 
-logger.info('WebSocket endpoint created at /simple-transfer');
+logger.info('WebSocket endpoint created at /ws');
 
 // Handle incoming calls
 svc.on('session:new', async (session) => {
@@ -151,7 +151,7 @@ function handleTransferTool(session, evt) {
 // Start server
 server.listen(PORT, () => {
   logger.info(`Simple transfer service listening on port ${PORT}`);
-  logger.info(`WebSocket: ws://localhost:${PORT}/simple-transfer`);
+  logger.info(`WebSocket: ws://localhost:${PORT}/ws`);
 });
 
 // Graceful shutdown
