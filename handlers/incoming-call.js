@@ -64,18 +64,16 @@ async function handleIncomingCall(session) {
 
       logger.info({transfer_reason, transferNumber, call_sid}, 'Executing transfer via client-side tool');
 
-      // Mark call as transferred in database
-      try {
-        await CallLog.markTransferred(call_sid, transferNumber, `Transfer reason: ${transfer_reason}`);
-      } catch (err) {
-        logger.error({err}, 'Error marking call as transferred');
-      }
-
-      // Send tool result back to Ultravox
+      // CRITICAL: Respond to tool invocation IMMEDIATELY (Ultravox timeout is 2.5s default)
       session.sendToolOutput({
         invocationId: evt.invocationId,
         result: {status: 'success', message: 'Transfer initiated'}
       });
+
+      // Now do async operations (database, transfer) without blocking tool response
+      // Mark call as transferred in database (async, non-blocking)
+      CallLog.markTransferred(call_sid, transferNumber, `Transfer reason: ${transfer_reason}`)
+        .catch(err => logger.error({err}, 'Error marking call as transferred'));
 
       // Execute transfer using enqueue/dequeue pattern
       session
