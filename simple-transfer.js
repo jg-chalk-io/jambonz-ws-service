@@ -48,18 +48,10 @@ const twilioToolHandlers = executeTwilioTransfer ? createToolHandlers({
 }) : null;
 
 /**
- * Generate TwiML for incoming Twilio call with Ultravox connection
+ * Create Ultravox call and generate TwiML for incoming Twilio call
  */
-function generateIncomingCallTwiML(from, to, callSid) {
+async function generateIncomingCallTwiML(from, to, callSid) {
   const systemPrompt = loadAgentDefinition(from);
-
-  // Escape XML special characters in system prompt
-  const escapedPrompt = systemPrompt
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 
   // Build tool definitions for Ultravox
   const tools = [
@@ -130,18 +122,44 @@ function generateIncomingCallTwiML(from, to, callSid) {
     }
   ];
 
+  // Create Ultravox call via REST API
+  logger.info({callSid}, 'Creating Ultravox call via REST API');
+
+  const ultravoxResponse = await fetch('https://api.ultravox.ai/api/calls', {
+    method: 'POST',
+    headers: {
+      'X-API-Key': process.env.ULTRAVOX_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      medium: {
+        twilio: {}
+      },
+      firstSpeakerSettings: {
+        agent: {}
+      },
+      model: 'fixie-ai/ultravox',
+      voice: 'Jessica',
+      temperature: 0.1,
+      systemPrompt: systemPrompt,
+      selectedTools: tools
+    })
+  });
+
+  if (!ultravoxResponse.ok) {
+    const errorText = await ultravoxResponse.text();
+    logger.error({status: ultravoxResponse.status, error: errorText}, 'Failed to create Ultravox call');
+    throw new Error(`Ultravox API error: ${ultravoxResponse.status} ${errorText}`);
+  }
+
+  const ultravoxCall = await ultravoxResponse.json();
+  logger.info({callId: ultravoxCall.callId, joinUrl: ultravoxCall.joinUrl}, 'Ultravox call created successfully');
+
+  // Return TwiML with the joinUrl
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="wss://api.ultravox.ai/stream">
-      <Parameter name="apiKey" value="${process.env.ULTRAVOX_API_KEY}" />
-      <Parameter name="systemPrompt" value="${escapedPrompt}" />
-      <Parameter name="voice" value="Jessica" />
-      <Parameter name="model" value="fixie-ai/ultravox" />
-      <Parameter name="temperature" value="0.1" />
-      <Parameter name="firstSpeaker" value="FIRST_SPEAKER_AGENT" />
-      <Parameter name="selectedTools" value="${JSON.stringify(tools).replace(/"/g, '&quot;')}" />
-    </Stream>
+    <Stream url="${ultravoxCall.joinUrl}" />
   </Connect>
 </Response>`;
 
@@ -365,21 +383,23 @@ server.on('request', (req, res) => {
         const {From, To, CallSid} = data;
         logger.info({From, To, CallSid}, 'Twilio incoming call');
 
-        try {
-          const twiml = generateIncomingCallTwiML(From, To, CallSid);
-          logger.info({twimlLength: twiml.length}, 'Generated TwiML response');
+        (async () => {
+          try {
+            const twiml = await generateIncomingCallTwiML(From, To, CallSid);
+            logger.info({twimlLength: twiml.length}, 'Generated TwiML response');
 
-          // Log first 500 chars of TwiML for debugging
-          logger.info({twimlPreview: twiml.substring(0, 500)}, 'TwiML preview');
+            // Log first 500 chars of TwiML for debugging
+            logger.info({twimlPreview: twiml.substring(0, 500)}, 'TwiML preview');
 
-          res.writeHead(200, {'Content-Type': 'text/xml'});
-          res.end(twiml);
-          logger.info('TwiML response sent successfully');
-        } catch (twimlError) {
-          logger.error({err: twimlError}, 'Error generating TwiML');
-          res.writeHead(500, {'Content-Type': 'text/xml'});
-          res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, an error occurred.</Say></Response>');
-        }
+            res.writeHead(200, {'Content-Type': 'text/xml'});
+            res.end(twiml);
+            logger.info('TwiML response sent successfully');
+          } catch (twimlError) {
+            logger.error({err: twimlError, stack: twimlError.stack}, 'Error generating TwiML');
+            res.writeHead(500, {'Content-Type': 'text/xml'});
+            res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, an error occurred.</Say></Response>');
+          }
+        })();
 
       } else if (req.url === '/twilio/transferToOnCall' && req.method === 'POST') {
         if (!twilioToolHandlers) {
