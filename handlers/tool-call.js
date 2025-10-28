@@ -114,33 +114,25 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist using REST API
-  // CRITICAL: sendCommand REST API expects OBJECT format, not array
-  // Array format [{target: [...]}] is for webhook verb responses only
+  // Dial specialist using sendCommand REST API
+  // sendCommand requires: call_hook (HTTP webhook), to (phone number), from (optional)
+  // NOTE: call_hook must return JSON verbs, NOT WebSocket connection
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      // Construct WebSocket URI for specialist call
-      const BASE_URL = process.env.BASE_URL || 'jambonz-ws-service-production.up.railway.app';
-      const wsUri = `wss://${BASE_URL}/dial-specialist`;
-
-      // REST API format: object with wsUri, target, answerOnBridge
+      // sendCommand dial format - call_hook is HTTP POST endpoint
       session.sendCommand('dial', {
-        wsUri,  // Routes to separate WebSocket endpoint for specialist session
-        target: [{
-          type: 'phone',
-          number: transferNumber,
-          trunk: 'voip.ms-jambonz'  // Explicit trunk specification
-        }],
-        answerOnBridge: true,
-        customerData: {
-          'X-Original-Caller': from,
-          'X-Transfer-Reason': reason,
-          'X-Queue': call_sid
+        call_hook: '/dial-specialist',  // HTTP webhook that returns dial verb
+        to: transferNumber,
+        // No 'from' - let trunk use default caller ID
+        tag: {
+          original_caller: from,
+          conversation_summary: reason,
+          queue: call_sid
         }
       });
-      console.log('=== EMERGENCY DEBUG: Dial command sent (REST API format) ===', {wsUri, transferNumber});
-      logger.info({transferNumber, call_sid, originalCaller: from, wsUri}, 'Specialist dial sent via REST API');
+      console.log('=== EMERGENCY DEBUG: Dial command sent ===', {call_hook: '/dial-specialist', to: transferNumber});
+      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial command sent');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
