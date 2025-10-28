@@ -94,41 +94,34 @@ async function handleTransfer(session, tool_call_id, args) {
     .then(() => logger.info('CallLog.markTransferred completed successfully'))
     .catch(err => logger.error({err}, 'Error marking call as transferred'));
 
-  // Use enqueue pattern to keep caller on hold with music
+  console.log('=== EMERGENCY DEBUG: About to call sendCommand(redirect) ===');
+
+  // Use redirect to execute transfer (matches reference implementation)
   try {
-    session
-      .say({text: 'Please hold while I transfer you to our on-call team.'})
-      .enqueue({
-        name: call_sid,
-        actionHook: '/consultationDone',
-        waitHook: '/wait-music'
-      })
-      .reply();
-    logger.info({call_sid}, 'Caller enqueued with hold music - reply() sent');
+    session.sendCommand('redirect', [
+      {
+        verb: 'say',
+        text: 'Please hold while I transfer you to our on-call team.'
+      },
+      {
+        verb: 'dial',
+        actionHook: '/dialComplete',
+        callerId: from,
+        target: [
+          {
+            type: 'phone',
+            number: transferNumber,
+            trunk: 'voip.ms-jambonz'
+          }
+        ]
+      }
+    ]);
+    console.log('=== EMERGENCY DEBUG: redirect sent successfully ===');
+    logger.info({transferNumber, call_sid}, 'Transfer redirect command sent');
   } catch (err) {
-    logger.error({err}, 'Error enqueuing caller');
+    console.log('=== EMERGENCY DEBUG: redirect ERROR ===', err);
+    logger.error({err}, 'Error sending redirect command');
   }
-
-  // Dial specialist on separate leg
-  setTimeout(() => {
-    logger.info({transferNumber, call_sid, from}, 'EXECUTING DIAL NOW');
-
-    try {
-      session.sendCommand('dial', {
-        call_hook: '/dial-specialist',
-        from: from,
-        to: transferNumber,
-        tag: {
-          conversation_summary: reason,
-          queue: call_sid,
-          original_caller: from
-        }
-      });
-      logger.info('sendCommand(dial) executed successfully');
-    } catch (err) {
-      logger.error({err}, 'Error executing dial command');
-    }
-  }, 500);
 }
 
 /**
