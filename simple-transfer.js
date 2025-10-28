@@ -129,7 +129,8 @@ function handleTransferTool(session, evt) {
         target: [
           {
             type: 'sip',
-            sipUri: AIRCALL_SIP_URI
+            sipUri: AIRCALL_SIP_URI,
+            trunk: 'Twilio-PetOne'  // Route via Twilio trunk (Aircall has whitelisted Twilio IPs)
           }
         ]
       }
