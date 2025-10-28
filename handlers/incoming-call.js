@@ -86,13 +86,13 @@ async function handleIncomingCall(session) {
               description: 'IMMEDIATELY transfer caller to live agent when they say: transfer, agent, speak to someone, person, representative, human, help, emergency, or ask to talk to anyone. Call this tool - do not just say you will transfer.',
               dynamicParameters: [
                 {
-                  name: 'conversation_summary',
+                  name: 'caller_request',
                   location: 'PARAMETER_LOCATION_BODY',
                   schema: {
                     type: 'string',
-                    description: 'Brief summary of what the caller said'
+                    description: 'What the caller just said (e.g. "I need help" or "transfer me")'
                   },
-                  required: true
+                  required: false
                 }
               ],
               staticParameters: [
@@ -149,12 +149,13 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
 function getBusinessHoursPrompt() {
   return `You are a helpful dental office assistant.
 
-When caller asks to transfer, speak to someone, or needs help:
-1. Immediately call transferToOnCall tool with conversation summary
-2. Do NOT respond with words until AFTER calling the tool
-3. Tool call is REQUIRED - words alone don't transfer
+CRITICAL: When a caller asks to be transferred or speak to someone, you MUST use the transferToOnCall tool. This is the ONLY way to transfer calls.
 
-Be brief and call the tool when needed.`;
+Example of correct behavior:
+Caller: "I need to speak to someone about my appointment"
+Assistant action: [calls transferToOnCall tool with caller_request="needs help with appointment"]
+
+Do NOT say you are transferring unless you have called the tool. Words alone cannot transfer calls.`;
 }
 
 function getAfterHoursPrompt() {

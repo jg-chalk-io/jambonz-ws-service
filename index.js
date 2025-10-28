@@ -102,7 +102,8 @@ const server = http.createServer(async (req, res) => {
       // Execute the transfer using enqueue pattern (like ultravox-warm-transfer example)
       logger.info({call_sid}, 'Executing transfer via HTTP tool with enqueue pattern');
 
-      const conversation_summary = payload.conversation_summary || 'Transfer requested';
+      // Accept both old (conversation_summary) and new (caller_request) parameter names
+      const conversation_summary = payload.caller_request || payload.conversation_summary || 'Caller requested transfer';
       const transferNumber = '+13654001512';
 
       // Mark call as transferred in database
