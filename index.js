@@ -289,24 +289,10 @@ svc.on('session:new', async (session) => {
 
   try {
     // Register event handlers for this session
-    // With client: {} tools, hooks are emitted as custom event paths (not verb:hook)
-    // See: https://github.com/jambonz/ultravox-s2s-example
+    // NOTE: /toolCall event handler REMOVED - using HTTP tools instead of client-side tools
+    // HTTP tools cause Ultravox to POST directly to /transferToOnCall endpoint, not send WebSocket events
+    // This allows AI session to end immediately when tool returns, enabling hold music to play
     session
-      .on('/toolCall', (evt) => {
-        console.log('=== EMERGENCY DEBUG: /toolCall event received ===', {
-          tool_call_id: evt.tool_call_id,
-          name: evt.name,
-          args: evt.args,
-          timestamp: new Date().toISOString()
-        });
-        logger.info({evt}, 'Received /toolCall event');
-        logger.info({
-          tool_call_id: evt.tool_call_id,
-          name: evt.name,
-          args: evt.args
-        }, 'Tool call details');
-        handleToolCall(session, evt);
-      })
       .on('/llmComplete', (evt) => {
         logger.info({evt}, 'Received /llmComplete event');
         handleLlmComplete(session, evt);
