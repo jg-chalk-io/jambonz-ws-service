@@ -5,7 +5,11 @@
   "main": "simple-transfer.js",
   "scripts": {
     "start": "node simple-transfer.js",
+    "start:jambonz": "node simple-transfer.js",
+    "start:twilio": "node twilio-handler.js",
     "dev": "nodemon simple-transfer.js",
+    "dev:twilio": "nodemon twilio-handler.js",
+    "configure:twilio": "node scripts/configure-twilio-number.js",
     "start:old": "node index.js"
   },
   "dependencies": {
@@ -13,7 +17,8 @@
     "@jambonz/node-client-ws": "^0.2.12",
     "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^16.3.1",
-    "pino": "^8.17.2"
+    "pino": "^8.17.2",
+    "twilio": "^5.10.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

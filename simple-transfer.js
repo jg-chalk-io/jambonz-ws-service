@@ -1,9 +1,9 @@
 require('dotenv').config();
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 const {createEndpoint} = require('@jambonz/node-client-ws');
 const pino = require('pino');
+const {loadAgentDefinition} = require('./shared/agent-config');
+const {createToolHandlers, createJambonzTransfer} = require('./shared/tool-handlers');
 
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3000;
@@ -13,36 +13,20 @@ const BASE_URL = process.env.BASE_URL || 'https://jambonz-ws-service-production.
 const TRANSFER_NUMBER = '+13654001512';  // Phone transfer until Aircall whitelists IP
 const TRANSFER_TRUNK = 'voip.ms-jambonz';
 
-// Client configuration (can be loaded from DB in production)
-const CLIENT_CONFIG = {
-  office_name: 'Humber Veterinary Clinic',
-  agent_name: 'Jessica',
-  office_hours: 'Monday through Friday, 9 A.M. to 5 P.M., Saturday 9 to noon',
-  clinic_open: false,  // Set based on business hours check
-  clinic_closed: true  // Set based on business hours check
-};
+// Create Jambonz-specific transfer function
+const executeTransfer = createJambonzTransfer(
+  process.env.JAMBONZ_ACCOUNT_SID,
+  process.env.JAMBONZ_API_KEY,
+  logger
+);
 
-/**
- * Load and interpolate agent definition template
- */
-function loadAgentDefinition() {
-  const templatePath = path.join(__dirname, 'ai-agent-definitions', 'humber_vet_ultravox_compliant.md');
-  let template = fs.readFileSync(templatePath, 'utf8');
-
-  // Get last 4 digits of caller number (will be set per-call)
-  const callerLast4 = '****';  // Placeholder, will be replaced per-call
-
-  // Interpolate template variables
-  template = template
-    .replace(/\{\{office_name\}\}/g, CLIENT_CONFIG.office_name)
-    .replace(/\{\{agent_name\}\}/g, CLIENT_CONFIG.agent_name)
-    .replace(/\{\{office_hours\}\}/g, CLIENT_CONFIG.office_hours)
-    .replace(/\{\{caller_phone_last4\}\}/g, callerLast4)
-    .replace(/\{\{clinic_open\}\}/g, CLIENT_CONFIG.clinic_open)
-    .replace(/\{\{clinic_closed\}\}/g, CLIENT_CONFIG.clinic_closed);
-
-  return template;
-}
+// Create tool handlers with Jambonz transfer logic
+const toolHandlers = createToolHandlers({
+  executeTransfer,
+  logger,
+  transferNumber: TRANSFER_NUMBER,
+  transferTrunk: TRANSFER_TRUNK
+});
 
 // Create HTTP server (handlers added below)
 const server = http.createServer();
@@ -229,11 +213,7 @@ svc.on('session:new', async (session) => {
   }
 });
 
-/**
- * HTTP Tool Handlers - Ultravox calls these endpoints directly
- */
-
-// Add HTTP routes for tool handlers
+// Add HTTP routes for tool handlers (shared implementations)
 server.on('request', (req, res) => {
   let body = '';
   req.on('data', chunk => {
@@ -245,11 +225,11 @@ server.on('request', (req, res) => {
       const data = body ? JSON.parse(body) : {};
 
       if (req.url === '/transferToOnCall' && req.method === 'POST') {
-        handleTransferToOnCall(data, res);
+        toolHandlers.handleTransferToOnCall(data, res);
       } else if (req.url === '/collectCallerInfo' && req.method === 'POST') {
-        handleCollectCallerInfo(data, res);
+        toolHandlers.handleCollectCallerInfo(data, res);
       } else if (req.url === '/hangUp' && req.method === 'POST') {
-        handleHangUp(data, res);
+        toolHandlers.handleHangUp(data, res);
       } else if (req.url === '/health') {
         res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({status: 'healthy'}));
@@ -264,108 +244,6 @@ server.on('request', (req, res) => {
     }
   });
 });
-
-/**
- * Handle transferToOnCall HTTP tool invocation
- */
-function handleTransferToOnCall(data, res) {
-  const {call_sid, urgency_reason} = data;
-
-  logger.info({call_sid, urgency_reason}, 'Transfer to on-call requested');
-
-  // Send immediate response to Ultravox
-  res.writeHead(200, {'Content-Type': 'application/json'});
-  res.end(JSON.stringify({
-    success: true,
-    message: 'Transfer initiated'
-  }));
-
-  // Execute transfer via Jambonz REST API
-  // Using sendCommand REST API to dial the transfer number
-  const jambonzRequest = http.request({
-    hostname: 'api.jambonz.cloud',
-    path: `/v1/Accounts/${process.env.JAMBONZ_ACCOUNT_SID}/Calls/${call_sid}/redirect`,
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.JAMBONZ_API_KEY}`,
-      'Content-Type': 'application/json'
-    }
-  }, (jambonzRes) => {
-    let responseBody = '';
-    jambonzRes.on('data', chunk => responseBody += chunk);
-    jambonzRes.on('end', () => {
-      logger.info({call_sid, statusCode: jambonzRes.statusCode}, 'Transfer redirect sent');
-    });
-  });
-
-  jambonzRequest.on('error', (err) => {
-    logger.error({err, call_sid}, 'Error sending transfer command');
-  });
-
-  // Send redirect command with phone dial
-  jambonzRequest.write(JSON.stringify([
-    {
-      verb: 'say',
-      text: 'Connecting you to our on-call team now.'
-    },
-    {
-      verb: 'dial',
-      actionHook: '/dialComplete',
-      target: [
-        {
-          type: 'phone',
-          number: TRANSFER_NUMBER,
-          trunk: TRANSFER_TRUNK
-        }
-      ]
-    }
-  ]));
-
-  jambonzRequest.end();
-}
-
-/**
- * Handle collectCallerInfo HTTP tool invocation
- */
-function handleCollectCallerInfo(data, res) {
-  const {call_sid, caller_name, pet_name, species, callback_number, concern_description} = data;
-
-  logger.info({
-    call_sid,
-    caller_name,
-    pet_name,
-    species,
-    callback_number,
-    concern_description
-  }, 'Caller information collected');
-
-  // TODO: Store in database (Supabase call_logs or messages table)
-
-  // Send success response
-  res.writeHead(200, {'Content-Type': 'application/json'});
-  res.end(JSON.stringify({
-    success: true,
-    message: 'Information recorded successfully'
-  }));
-}
-
-/**
- * Handle hangUp HTTP tool invocation
- */
-function handleHangUp(data, res) {
-  const {call_sid} = data;
-
-  logger.info({call_sid}, 'Hangup requested');
-
-  // Send success response
-  res.writeHead(200, {'Content-Type': 'application/json'});
-  res.end(JSON.stringify({
-    success: true,
-    message: 'Call will end'
-  }));
-
-  // Hangup will be handled by the .hangup() in the LLM verb chain
-}
 
 // Start server
 server.listen(PORT, () => {
