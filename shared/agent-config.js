@@ -13,21 +13,22 @@ const CLIENT_CONFIG = {
 
 /**
  * Load and interpolate agent definition template
- * @param {string|null} callerNumber - Optional caller phone number for last 4 digits (also used for client lookup)
+ * @param {string|null} clinicNumber - Phone number dialed (To field) - used to look up client
+ * @param {string|null} callerNumber - Caller's phone number (From field) - used for {{caller_phone_last4}}
  * @returns {Promise<string>} Interpolated system prompt
  */
-async function loadAgentDefinition(callerNumber = null) {
+async function loadAgentDefinition(clinicNumber = null, callerNumber = null) {
   try {
     let template = null;
 
-    // Try to load from database if caller number provided
-    if (callerNumber) {
+    // Try to load from database if clinic number provided
+    if (clinicNumber) {
       try {
-        // Look up client by phone number
+        // Look up client by clinic phone number (the number that was dialed)
         const {data: phoneData, error: phoneError} = await supabase
           .from('phone_numbers')
           .select('client_id')
-          .eq('phone_number', callerNumber)
+          .eq('phone_number', clinicNumber)
           .single();
 
         if (!phoneError && phoneData) {
@@ -67,7 +68,7 @@ async function loadAgentDefinition(callerNumber = null) {
       console.log(`Loaded agent template from file, length: ${template.length}`);
     }
 
-    // Get last 4 digits of caller number
+    // Get last 4 digits of caller's phone number (who's calling in)
     const callerLast4 = callerNumber ? callerNumber.slice(-4) : '****';
 
     // Interpolate template variables

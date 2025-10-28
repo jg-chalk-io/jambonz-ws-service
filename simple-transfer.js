@@ -51,7 +51,9 @@ const twilioToolHandlers = executeTwilioTransfer ? createToolHandlers({
  * Create Ultravox call and generate TwiML for incoming Twilio call
  */
 async function generateIncomingCallTwiML(from, to, callSid) {
-  const systemPrompt = await loadAgentDefinition(to); // Use 'to' number to look up client
+  // Look up client by 'to' number (clinic number dialed)
+  // Pass 'from' for {{caller_phone_last4}} interpolation
+  const systemPrompt = await loadAgentDefinition(to, from);
 
   // Build tool definitions for Ultravox
   const tools = [
