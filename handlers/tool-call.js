@@ -94,34 +94,53 @@ async function handleTransfer(session, tool_call_id, args) {
     .then(() => logger.info('CallLog.markTransferred completed successfully'))
     .catch(err => logger.error({err}, 'Error marking call as transferred'));
 
-  console.log('=== EMERGENCY DEBUG: About to call sendCommand(redirect) ===');
+  console.log('=== EMERGENCY DEBUG: About to enqueue caller ===');
 
-  // Use redirect to execute transfer (matches reference implementation)
+  // Enqueue caller with hold music (keep LLM session alive)
   try {
-    session.sendCommand('redirect', [
-      {
-        verb: 'say',
-        text: 'Please hold while I transfer you to our on-call team.'
-      },
-      {
-        verb: 'dial',
-        actionHook: '/dialComplete',
-        callerId: from,
-        target: [
-          {
-            type: 'phone',
-            number: transferNumber,
-            trunk: 'voip.ms-jambonz'
-          }
-        ]
-      }
-    ]);
-    console.log('=== EMERGENCY DEBUG: redirect sent successfully ===');
-    logger.info({transferNumber, call_sid}, 'Transfer redirect command sent');
+    session
+      .say({text: 'Please hold while I transfer you to our on-call team.'})
+      .enqueue({
+        name: call_sid,
+        actionHook: '/consultationDone',
+        waitHook: '/wait-music'
+      })
+      .reply();
+    console.log('=== EMERGENCY DEBUG: Caller enqueued, about to dial specialist ===');
+    logger.info({call_sid}, 'Caller enqueued with hold music');
   } catch (err) {
-    console.log('=== EMERGENCY DEBUG: redirect ERROR ===', err);
-    logger.error({err}, 'Error sending redirect command');
+    console.log('=== EMERGENCY DEBUG: enqueue ERROR ===', err);
+    logger.error({err}, 'Error enqueuing caller');
+    return;
   }
+
+  // Dial specialist on SEPARATE WebSocket endpoint
+  // Use array syntax with wsUri (not object syntax with call_hook)
+  setTimeout(() => {
+    console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
+    try {
+      const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
+      session.sendCommand('dial', [{
+        target: [{
+          type: 'phone',
+          number: transferNumber,
+          trunk: 'voip.ms-jambonz'
+        }],
+        wsUri,
+        answerOnBridge: true,
+        headers: {
+          'X-Original-Caller': from,
+          'X-Transfer-Reason': reason,
+          'X-Queue': call_sid
+        }
+      }]);
+      console.log('=== EMERGENCY DEBUG: Dial command sent to specialist endpoint ===');
+      logger.info({transferNumber, wsUri, call_sid}, 'Specialist dial command sent');
+    } catch (err) {
+      console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
+      logger.error({err}, 'Error dialing specialist');
+    }
+  }, 500);
 }
 
 /**
