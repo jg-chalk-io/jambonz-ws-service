@@ -114,28 +114,22 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist on SEPARATE WebSocket endpoint
-  // Use array syntax with wsUri (not object syntax with call_hook)
+  // Dial specialist using REST API (simpler than WebSocket endpoint)
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      const wsUri = 'wss://jambonz-ws-service-production.up.railway.app/dial-specialist';
-      session.sendCommand('dial', [{
-        target: [{
-          type: 'phone',
-          number: transferNumber,
-          trunk: 'voip.ms-jambonz'
-        }],
-        wsUri,
-        answerOnBridge: true,
-        headers: {
-          'X-Original-Caller': from,
-          'X-Transfer-Reason': reason,
-          'X-Queue': call_sid
+      session.sendCommand('dial', {
+        call_hook: '/dial-specialist',
+        from: from,
+        to: transferNumber,
+        tag: {
+          original_caller: from,
+          conversation_summary: reason,
+          queue: call_sid
         }
-      }]);
-      console.log('=== EMERGENCY DEBUG: Dial command sent to specialist endpoint ===');
-      logger.info({transferNumber, wsUri, call_sid}, 'Specialist dial command sent');
+      });
+      console.log('=== EMERGENCY DEBUG: Dial command sent via REST API ===');
+      logger.info({transferNumber, call_sid, from}, 'Specialist dial command sent via REST API');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
