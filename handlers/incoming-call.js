@@ -106,9 +106,11 @@ async function handleIncomingCall(session) {
         ]
       }
     })
-    .hangup()
     .reply();
 }
+
+// NOTE: .hangup() removed - call stays alive for LLM session
+// Hangup handled by: /llmComplete event, tool handlers, or caller hanging up
 
 /**
  * Generate system prompt with client-specific variables
