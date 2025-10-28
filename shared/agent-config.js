@@ -24,30 +24,21 @@ async function loadAgentDefinition(clinicNumber = null, callerNumber = null) {
     // Try to load from database if clinic number provided
     if (clinicNumber) {
       try {
-        // Look up client by clinic phone number (the number that was dialed)
-        const {data: phoneData, error: phoneError} = await supabase
-          .from('phone_numbers')
-          .select('client_id')
-          .eq('phone_number', clinicNumber)
+        // Look up client directly by VetWise phone number (the number that was dialed)
+        const {data: clientData, error: clientError} = await supabase
+          .from('clients')
+          .select('*')
+          .eq('vetwise_phone', clinicNumber)
           .single();
 
-        if (!phoneError && phoneData) {
-          // Load client configuration including system_prompt
-          const {data: clientData, error: clientError} = await supabase
-            .from('clients')
-            .select('*')
-            .eq('id', phoneData.client_id)
-            .single();
+        if (!clientError && clientData && clientData.system_prompt) {
+          console.log(`Loaded system prompt from database for client: ${clientData.name}`);
+          template = clientData.system_prompt;
 
-          if (!clientError && clientData && clientData.system_prompt) {
-            console.log(`Loaded system prompt from database for client: ${clientData.name}`);
-            template = clientData.system_prompt;
-
-            // Update CLIENT_CONFIG with database values
-            CLIENT_CONFIG.office_name = clientData.office_name || CLIENT_CONFIG.office_name;
-            CLIENT_CONFIG.agent_name = 'Jessica'; // Default voice
-            CLIENT_CONFIG.office_hours = clientData.office_hours || CLIENT_CONFIG.office_hours;
-          }
+          // Update CLIENT_CONFIG with database values
+          CLIENT_CONFIG.office_name = clientData.office_name || CLIENT_CONFIG.office_name;
+          CLIENT_CONFIG.agent_name = 'Jessica'; // Default voice
+          CLIENT_CONFIG.office_hours = clientData.office_hours || CLIENT_CONFIG.office_hours;
         }
       } catch (dbError) {
         console.warn('Database lookup failed, falling back to template file:', dbError.message);
