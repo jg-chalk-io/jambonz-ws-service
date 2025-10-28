@@ -114,9 +114,9 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist using WebSocket endpoint (not HTTP webhook)
-  // CRITICAL: sendCommand('dial') expects ARRAY format for WebSocket-based calls
-  // Reference: https://github.com/jambonz/ultravox-warm-transfer
+  // Dial specialist using REST API
+  // CRITICAL: sendCommand REST API expects OBJECT format, not array
+  // Array format [{target: [...]}] is for webhook verb responses only
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
@@ -124,22 +124,23 @@ async function handleTransfer(session, tool_call_id, args) {
       const BASE_URL = process.env.BASE_URL || 'jambonz-ws-service-production.up.railway.app';
       const wsUri = `wss://${BASE_URL}/dial-specialist`;
 
-      session.sendCommand('dial', [{
+      // REST API format: object with wsUri, target, answerOnBridge
+      session.sendCommand('dial', {
+        wsUri,  // Routes to separate WebSocket endpoint for specialist session
         target: [{
           type: 'phone',
           number: transferNumber,
           trunk: 'voip.ms-jambonz'  // Explicit trunk specification
         }],
-        wsUri,  // Routes to separate WebSocket endpoint for specialist session
         answerOnBridge: true,
         customerData: {
           'X-Original-Caller': from,
           'X-Transfer-Reason': reason,
           'X-Queue': call_sid
         }
-      }]);
-      console.log('=== EMERGENCY DEBUG: Dial command sent with wsUri ===', {wsUri});
-      logger.info({transferNumber, call_sid, originalCaller: from, wsUri}, 'Specialist dial sent via WebSocket');
+      });
+      console.log('=== EMERGENCY DEBUG: Dial command sent (REST API format) ===', {wsUri, transferNumber});
+      logger.info({transferNumber, call_sid, originalCaller: from, wsUri}, 'Specialist dial sent via REST API');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
