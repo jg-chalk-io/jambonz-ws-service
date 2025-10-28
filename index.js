@@ -290,6 +290,12 @@ svc.on('session:new', async (session) => {
     // See: https://github.com/jambonz/ultravox-s2s-example
     session
       .on('/toolCall', (evt) => {
+        console.log('=== EMERGENCY DEBUG: /toolCall event received ===', {
+          tool_call_id: evt.tool_call_id,
+          name: evt.name,
+          args: evt.args,
+          timestamp: new Date().toISOString()
+        });
         logger.info({evt}, 'Received /toolCall event');
         logger.info({
           tool_call_id: evt.tool_call_id,

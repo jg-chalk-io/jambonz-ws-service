@@ -55,6 +55,12 @@ async function handleToolCall(session, evt) {
  * Uses Jambonz pattern: sendToolOutput immediately, then redirect
  */
 async function handleTransfer(session, tool_call_id, args) {
+  console.log('=== EMERGENCY DEBUG: handleTransfer called ===', {
+    tool_call_id,
+    args,
+    timestamp: new Date().toISOString()
+  });
+
   const {logger, client} = session.locals;
   const {call_sid, from} = session;
 
@@ -67,6 +73,8 @@ async function handleTransfer(session, tool_call_id, args) {
 
   logger.info({reason, transferNumber}, 'Transfer details extracted');
 
+  console.log('=== EMERGENCY DEBUG: About to call sendToolOutput ===');
+
   // CRITICAL: Send tool output FIRST (confirms to Ultravox) - MUST be before ANY async operations
   try {
     session.sendToolOutput(tool_call_id, {
@@ -74,8 +82,10 @@ async function handleTransfer(session, tool_call_id, args) {
       invocation_id: tool_call_id,
       result: 'Transfer initiated'
     });
+    console.log('=== EMERGENCY DEBUG: sendToolOutput completed ===');
     logger.info('Tool output sent to Ultravox successfully');
   } catch (err) {
+    console.log('=== EMERGENCY DEBUG: sendToolOutput ERROR ===', err);
     logger.error({err}, 'Error sending tool output');
   }
 
