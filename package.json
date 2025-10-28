@@ -2,10 +2,11 @@
   "name": "jambonz-ws-service",
   "version": "1.0.0",
   "description": "Jambonz WebSocket service for LLM call handling with proper session context",
-  "main": "index.js",
+  "main": "simple-transfer.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node simple-transfer.js",
+    "dev": "nodemon simple-transfer.js",
+    "start:old": "node index.js"
   },
   "dependencies": {
     "@jambonz/node-client": "^0.4.10",
