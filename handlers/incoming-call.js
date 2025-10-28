@@ -98,9 +98,20 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              // CLIENT-SIDE tool - triggers WebSocket /toolCall event handler
-              // Jambonz pattern uses client: {} NOT http: {} for proper session management
-              client: {}
+              // HTTP tool - Ultravox recommended for telephony integration
+              // Ends AI session immediately (saves money), prevents continued speaking
+              http: {
+                baseUrlPattern: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/transferToOnCall`,
+                httpMethod: 'POST'
+              },
+              // Pass call_sid via static parameters so HTTP endpoint can look up session
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
+                }
+              ]
             }
           }
         ]

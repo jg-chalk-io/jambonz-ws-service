@@ -115,15 +115,20 @@ const server = http.createServer(async (req, res) => {
         logger.error({err}, 'Error marking call as transferred');
       }
 
-      // Put caller in queue with hold music
-      session
-        .say({text: 'Please hold while I transfer you to our on-call team.'})
-        .enqueue({
+      // Redirect call away from LLM to enqueue pattern
+      // Using sendCommand('redirect') to interrupt and replace LLM verb execution
+      session.sendCommand('redirect', [
+        {
+          verb: 'say',
+          text: 'Please hold while I transfer you to our on-call team.'
+        },
+        {
+          verb: 'enqueue',
           name: call_sid,
           actionHook: '/consultationDone',
           waitHook: '/wait-music'
-        })
-        .reply();
+        }
+      ]);
 
       // Dial specialist on separate leg using REST API
       // sendCommand creates a NEW outbound call leg (not redirect)
