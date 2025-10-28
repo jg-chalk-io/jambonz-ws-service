@@ -132,8 +132,11 @@ const server = http.createServer(async (req, res) => {
 
         session.sendCommand('dial', {
           call_hook: '/dial-specialist',
-          from: session.from,
-          to: transferNumber,
+          to: {
+            type: 'phone',
+            number: transferNumber,
+            trunk: 'voip.ms-jambonz'
+          },
           tag: {
             original_caller: session.from,
             conversation_summary,

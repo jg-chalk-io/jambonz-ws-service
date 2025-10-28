@@ -85,7 +85,7 @@ async function handleIncomingCall(session) {
           {
             temporaryTool: {
               modelToolName: 'transferToOnCall',
-              description: 'IMMEDIATELY transfer caller to live agent when they say: transfer, agent, speak to someone, person, representative, human, help, emergency, or ask to talk to anyone. Call this tool - do not just say you will transfer.',
+              description: 'IMMEDIATELY transfer caller to live agent when they say: transfer, agent, speak to someone, person, representative, human, help, emergency, or ask to talk to anyone. MUST call this tool - do not just say you will transfer.',
               dynamicParameters: [
                 {
                   name: 'transfer_reason',
@@ -98,10 +98,19 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              // CLIENT-SIDE tool - Ultravox sends WebSocket message
-              // Handled by /toolCall event in index.js → handlers/tool-call.js
-              // NO HTTP config, NO staticParameters - this triggers WebSocket flow
-              client: {}
+              // HTTP tool - Ultravox calls HTTP endpoint directly, AI session ends immediately
+              // This allows enqueue hold music to play instead of AI continuing to speak
+              http: {
+                url: `${process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app'}/transferToOnCall`,
+                method: 'POST'
+              },
+              staticParameters: [
+                {
+                  name: 'call_sid',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  value: call_sid
+                }
+              ]
             }
           }
         ]
