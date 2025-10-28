@@ -114,30 +114,27 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist using sendCommand
-  // sendCommand signature: sendCommand(command, call_sid, verbs_array)
-  // We use 'redirect' command with dial verb to create outbound call
+  // Dial specialist using sendCommand REST API
+  // This creates a SEPARATE outbound call leg without killing the LLM session
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      // sendCommand expects: (command, call_sid, [verb objects])
-      session.sendCommand('redirect', call_sid, [{
-        verb: 'dial',
-        actionHook: '/dial-specialist',
-        answerOnBridge: true,
-        target: [{
+      // Use 'dial' command (NOT 'redirect') to keep LLM session alive
+      session.sendCommand('dial', {
+        call_hook: '/dial-specialist',
+        to: {
           type: 'phone',
           number: transferNumber,
           trunk: 'voip.ms-jambonz'
-        }],
+        },
         tag: {
           original_caller: from,
           conversation_summary: reason,
           queue: call_sid
         }
-      }]);
+      });
       console.log('=== EMERGENCY DEBUG: Dial command sent ===', {call_sid, transferNumber});
-      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial redirect sent');
+      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial via REST API');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
