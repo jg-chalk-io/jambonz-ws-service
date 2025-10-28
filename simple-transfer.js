@@ -156,6 +156,7 @@ const makeService = createEndpoint({server});
 const svc = makeService({path: '/ws'});
 
 logger.info('WebSocket endpoint created at /ws');
+logger.info('HTTP routes ready for both Jambonz and Twilio');
 
 // Handle incoming calls
 svc.on('session:new', async (session) => {
