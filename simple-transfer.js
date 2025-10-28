@@ -428,6 +428,7 @@ server.listen(PORT, () => {
   if (twilioClient) {
     logger.info(`Twilio HTTP: ${BASE_URL}/twilio/incoming`);
   }
+  logger.info(`Health check: ${BASE_URL}/health`);
 });
 
 // Graceful shutdown
