@@ -163,7 +163,7 @@ async function handleIncomingCall(session) {
                 }
               ],
               // CLIENT-SIDE tool - Ultravox sends WebSocket message
-              // Handled by session.on('transferToOnCall', ...) above
+              // Handled by session.on('/toolCall', ...) above
               // NO HTTP config, NO staticParameters - this triggers WebSocket flow
               client: {}
             }
