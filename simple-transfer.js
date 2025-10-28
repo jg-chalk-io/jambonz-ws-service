@@ -369,6 +369,9 @@ server.on('request', (req, res) => {
           const twiml = generateIncomingCallTwiML(From, To, CallSid);
           logger.info({twimlLength: twiml.length}, 'Generated TwiML response');
 
+          // Log first 500 chars of TwiML for debugging
+          logger.info({twimlPreview: twiml.substring(0, 500)}, 'TwiML preview');
+
           res.writeHead(200, {'Content-Type': 'text/xml'});
           res.end(twiml);
           logger.info('TwiML response sent successfully');
