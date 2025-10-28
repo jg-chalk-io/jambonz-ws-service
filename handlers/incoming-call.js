@@ -63,6 +63,7 @@ async function handleIncomingCall(session) {
       },
       actionHook: '/llmComplete',
       eventHook: '/llmEvent',
+      toolHook: '/toolCall',
       llmOptions: {
         systemPrompt,
         firstSpeaker: 'FIRST_SPEAKER_AGENT',
