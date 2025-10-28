@@ -49,8 +49,68 @@ async function handleIncomingCall(session) {
   logger.info({isOpen, clientName: client.name}, 'Initiating Ultravox LLM session');
 
   // Build LLM verb with Ultravox
-  // Using HTTP server-side tools - Ultravox calls our endpoint directly
-  const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
+  // Using CLIENT-SIDE tools - Ultravox sends WebSocket message to our handler
+  // This pattern matches the working jambonz ultravox-transfer-call-example
+
+  // Tool call handler - invoked when AI calls the transferToOnCall tool
+  session.on('transferToOnCall', async (evt) => {
+    const {logger} = session.locals;
+    logger.info({evt, call_sid}, 'Tool call received from Ultravox');
+
+    try {
+      const {params} = evt;
+      const transfer_reason = params?.transfer_reason || 'other';
+      const transferNumber = '+13654001512';
+
+      logger.info({transfer_reason, transferNumber, call_sid}, 'Executing transfer via client-side tool');
+
+      // Mark call as transferred in database
+      try {
+        await CallLog.markTransferred(call_sid, transferNumber, `Transfer reason: ${transfer_reason}`);
+      } catch (err) {
+        logger.error({err}, 'Error marking call as transferred');
+      }
+
+      // Send tool result back to Ultravox
+      session.sendToolOutput({
+        invocationId: evt.invocationId,
+        result: {status: 'success', message: 'Transfer initiated'}
+      });
+
+      // Execute transfer using enqueue/dequeue pattern
+      session
+        .say({text: 'Please hold while I transfer you to our on-call team.'})
+        .enqueue({
+          name: call_sid,
+          actionHook: '/consultationDone',
+          waitHook: '/wait-music'
+        })
+        .reply();
+
+      // Dial specialist on separate leg
+      setTimeout(() => {
+        logger.info({transferNumber, call_sid, from: session.from}, 'Dialing specialist');
+
+        session.sendCommand('dial', {
+          call_hook: '/dial-specialist',
+          from: session.from,
+          to: transferNumber,
+          tag: {
+            original_caller: session.from,
+            transfer_reason,
+            queue: call_sid
+          }
+        });
+      }, 500);
+
+    } catch (err) {
+      logger.error({err, call_sid}, 'Error handling transferToOnCall tool call');
+      session.sendToolOutput({
+        invocationId: evt.invocationId,
+        result: {status: 'error', message: err.message}
+      });
+    }
+  });
 
   session
     .pause({length: 0.5})
@@ -96,18 +156,10 @@ async function handleIncomingCall(session) {
                   required: true
                 }
               ],
-              staticParameters: [
-                {
-                  name: 'call_sid',
-                  location: 'PARAMETER_LOCATION_BODY',
-                  value: call_sid
-                }
-              ],
-              // HTTP server-side tool - Ultravox calls this endpoint
-              http: {
-                baseUrlPattern: `${baseUrl}/transferToOnCall`,
-                httpMethod: 'POST'
-              }
+              // CLIENT-SIDE tool - Ultravox sends WebSocket message
+              // Handled by session.on('transferToOnCall', ...) above
+              // NO HTTP config, NO staticParameters - this triggers WebSocket flow
+              client: {}
             }
           }
         ]
