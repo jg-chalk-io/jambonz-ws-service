@@ -17,21 +17,35 @@ const CLIENT_CONFIG = {
  */
 function loadAgentDefinition(callerNumber = null) {
   const templatePath = path.join(__dirname, '..', 'ai-agent-definitions', 'humber_vet_ultravox_compliant.md');
-  let template = fs.readFileSync(templatePath, 'utf8');
 
-  // Get last 4 digits of caller number
-  const callerLast4 = callerNumber ? callerNumber.slice(-4) : '****';
+  try {
+    // Check if file exists
+    if (!fs.existsSync(templatePath)) {
+      console.error(`Template file not found: ${templatePath}`);
+      throw new Error(`Template file not found: ${templatePath}`);
+    }
 
-  // Interpolate template variables
-  template = template
-    .replace(/\{\{office_name\}\}/g, CLIENT_CONFIG.office_name)
-    .replace(/\{\{agent_name\}\}/g, CLIENT_CONFIG.agent_name)
-    .replace(/\{\{office_hours\}\}/g, CLIENT_CONFIG.office_hours)
-    .replace(/\{\{caller_phone_last4\}\}/g, callerLast4)
-    .replace(/\{\{clinic_open\}\}/g, CLIENT_CONFIG.clinic_open)
-    .replace(/\{\{clinic_closed\}\}/g, CLIENT_CONFIG.clinic_closed);
+    let template = fs.readFileSync(templatePath, 'utf8');
+    console.log(`Loaded agent template, length: ${template.length}`);
 
-  return template;
+    // Get last 4 digits of caller number
+    const callerLast4 = callerNumber ? callerNumber.slice(-4) : '****';
+
+    // Interpolate template variables
+    template = template
+      .replace(/\{\{office_name\}\}/g, CLIENT_CONFIG.office_name)
+      .replace(/\{\{agent_name\}\}/g, CLIENT_CONFIG.agent_name)
+      .replace(/\{\{office_hours\}\}/g, CLIENT_CONFIG.office_hours)
+      .replace(/\{\{caller_phone_last4\}\}/g, callerLast4)
+      .replace(/\{\{clinic_open\}\}/g, CLIENT_CONFIG.clinic_open)
+      .replace(/\{\{clinic_closed\}\}/g, CLIENT_CONFIG.clinic_closed);
+
+    console.log('Template interpolation complete');
+    return template;
+  } catch (error) {
+    console.error('Error loading agent definition:', error);
+    throw error;
+  }
 }
 
 module.exports = {

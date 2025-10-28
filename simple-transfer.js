@@ -365,10 +365,18 @@ server.on('request', (req, res) => {
         const {From, To, CallSid} = data;
         logger.info({From, To, CallSid}, 'Twilio incoming call');
 
-        const twiml = generateIncomingCallTwiML(From, To, CallSid);
+        try {
+          const twiml = generateIncomingCallTwiML(From, To, CallSid);
+          logger.info({twimlLength: twiml.length}, 'Generated TwiML response');
 
-        res.writeHead(200, {'Content-Type': 'text/xml'});
-        res.end(twiml);
+          res.writeHead(200, {'Content-Type': 'text/xml'});
+          res.end(twiml);
+          logger.info('TwiML response sent successfully');
+        } catch (twimlError) {
+          logger.error({err: twimlError}, 'Error generating TwiML');
+          res.writeHead(500, {'Content-Type': 'text/xml'});
+          res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, an error occurred.</Say></Response>');
+        }
 
       } else if (req.url === '/twilio/transferToOnCall' && req.method === 'POST') {
         if (!twilioToolHandlers) {
