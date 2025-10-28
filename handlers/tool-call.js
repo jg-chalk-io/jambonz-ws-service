@@ -114,27 +114,32 @@ async function handleTransfer(session, tool_call_id, args) {
     return;
   }
 
-  // Dial specialist using REST API with correct Jambonz payload structure
-  // NOTE: No 'from' parameter - VoIP.ms requires verified caller IDs
-  // NOTE: call_hook is a STRING path, not object (for sendCommand API)
+  // Dial specialist using WebSocket endpoint (not HTTP webhook)
+  // CRITICAL: sendCommand('dial') expects ARRAY format for WebSocket-based calls
+  // Reference: https://github.com/jambonz/ultravox-warm-transfer
   setTimeout(() => {
     console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      session.sendCommand('dial', {
-        call_hook: '/dial-specialist',  // STRING path for sendCommand (not object!)
-        // No 'from' - use trunk default caller ID (VoIP.ms requires verified IDs)
-        to: {
+      // Construct WebSocket URI for specialist call
+      const BASE_URL = process.env.BASE_URL || 'jambonz-ws-service-production.up.railway.app';
+      const wsUri = `wss://${BASE_URL}/dial-specialist`;
+
+      session.sendCommand('dial', [{
+        target: [{
           type: 'phone',
-          number: transferNumber
-        },
-        tag: {
-          original_caller: from,
-          conversation_summary: reason,
-          queue: call_sid
+          number: transferNumber,
+          trunk: 'voip.ms-jambonz'  // Explicit trunk specification
+        }],
+        wsUri,  // Routes to separate WebSocket endpoint for specialist session
+        answerOnBridge: true,
+        customerData: {
+          'X-Original-Caller': from,
+          'X-Transfer-Reason': reason,
+          'X-Queue': call_sid
         }
-      });
-      console.log('=== EMERGENCY DEBUG: Dial command sent with call_hook=/dial-specialist ===');
-      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial sent (call_hook=/dial-specialist)');
+      }]);
+      console.log('=== EMERGENCY DEBUG: Dial command sent with wsUri ===', {wsUri});
+      logger.info({transferNumber, call_sid, originalCaller: from, wsUri}, 'Specialist dial sent via WebSocket');
     } catch (err) {
       console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
