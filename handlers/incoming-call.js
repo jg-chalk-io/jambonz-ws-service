@@ -86,13 +86,14 @@ async function handleIncomingCall(session) {
               description: 'IMMEDIATELY transfer caller to live agent when they say: transfer, agent, speak to someone, person, representative, human, help, emergency, or ask to talk to anyone. Call this tool - do not just say you will transfer.',
               dynamicParameters: [
                 {
-                  name: 'caller_request',
+                  name: 'transfer_reason',
                   location: 'PARAMETER_LOCATION_BODY',
                   schema: {
                     type: 'string',
-                    description: 'What the caller just said (e.g. "I need help" or "transfer me")'
+                    enum: ['emergency', 'needs_help', 'wants_human', 'other'],
+                    description: 'Why the caller needs to be transferred'
                   },
-                  required: false
+                  required: true
                 }
               ],
               staticParameters: [
@@ -149,13 +150,15 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
 function getBusinessHoursPrompt() {
   return `You are a helpful dental office assistant.
 
-CRITICAL: When a caller asks to be transferred or speak to someone, you MUST use the transferToOnCall tool. This is the ONLY way to transfer calls.
+When a caller asks to be transferred or speak to someone, ask if they would like to speak with a live agent.
 
-Example of correct behavior:
-Caller: "I need to speak to someone about my appointment"
-Assistant action: [calls transferToOnCall tool with caller_request="needs help with appointment"]
+If the caller confirms they want to speak to someone, you MUST call the transferToOnCall tool immediately. Use the appropriate transfer_reason:
+- emergency: life-threatening dental emergency
+- needs_help: needs assistance you cannot provide
+- wants_human: specifically asked for a person/agent
+- other: any other transfer request
 
-Do NOT say you are transferring unless you have called the tool. Words alone cannot transfer calls.`;
+Do NOT say you are transferring unless you have successfully called the tool.`;
 }
 
 function getAfterHoursPrompt() {
