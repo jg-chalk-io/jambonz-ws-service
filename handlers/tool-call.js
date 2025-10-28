@@ -55,71 +55,54 @@ async function handleToolCall(session, evt) {
  * Uses Jambonz pattern: sendToolOutput immediately, then redirect
  */
 async function handleTransfer(session, tool_call_id, args) {
-  console.log('=== EMERGENCY DEBUG: handleTransfer called ===', {
-    tool_call_id,
-    args,
-    timestamp: new Date().toISOString()
-  });
-
   const {logger, client} = session.locals;
   const {call_sid, from} = session;
 
   logger.info({args, call_sid, from}, 'handleTransfer CALLED - starting transfer execution');
 
-  const reason = args.reason || args.transfer_reason || args.conversation_summary || 'Customer requested transfer';
+  const conversation_summary = args.reason || args.transfer_reason || args.conversation_summary || 'Customer requested transfer';
 
-  // TEMPORARY: Hard-code transfer to 3654001512 for testing
+  // Hard-code transfer number for testing
   const transferNumber = '+13654001512';
 
-  logger.info({reason, transferNumber}, 'Transfer details extracted');
+  logger.info({conversation_summary, transferNumber}, 'Transfer details extracted');
 
-  console.log('=== EMERGENCY DEBUG: About to call sendToolOutput ===');
-
-  // CRITICAL: Send tool output FIRST (confirms to Ultravox) - MUST be before ANY async operations
+  // CRITICAL: Send tool output FIRST (confirms to Ultravox)
   try {
     session.sendToolOutput(tool_call_id, {
       type: 'client_tool_result',
       invocation_id: tool_call_id,
-      result: 'Transfer initiated'
+      result: 'Successfully initiated transfer to specialist.'
     });
-    console.log('=== EMERGENCY DEBUG: sendToolOutput completed ===');
     logger.info('Tool output sent to Ultravox successfully');
   } catch (err) {
-    console.log('=== EMERGENCY DEBUG: sendToolOutput ERROR ===', err);
     logger.error({err}, 'Error sending tool output');
   }
 
   // Mark call as transferred in database (async, non-blocking)
-  CallLog.markTransferred(call_sid, transferNumber, reason)
+  CallLog.markTransferred(call_sid, transferNumber, conversation_summary)
     .then(() => logger.info('CallLog.markTransferred completed successfully'))
     .catch(err => logger.error({err}, 'Error marking call as transferred'));
 
-  console.log('=== EMERGENCY DEBUG: About to enqueue caller ===');
-
-  // Enqueue caller with hold music (keep LLM session alive)
+  // Enqueue caller - no waitHook per Jambonz pattern (music handled differently)
   try {
     session
       .say({text: 'Please hold while I transfer you to our on-call team.'})
       .enqueue({
         name: call_sid,
-        actionHook: '/consultationDone',
-        waitHook: '/wait-music'
+        actionHook: '/consultationDone'
       })
-      .reply();
-    console.log('=== EMERGENCY DEBUG: Caller enqueued, about to dial specialist ===');
-    logger.info({call_sid}, 'Caller enqueued with hold music');
+      .send();
+    logger.info({call_sid}, 'Caller enqueued');
   } catch (err) {
-    console.log('=== EMERGENCY DEBUG: enqueue ERROR ===', err);
     logger.error({err}, 'Error enqueuing caller');
     return;
   }
 
-  // Dial specialist using sendCommand REST API
-  // This creates a SEPARATE outbound call leg without killing the LLM session
+  // Dial specialist using sendCommand REST API (Jambonz pattern)
+  // This creates a SEPARATE outbound call leg
   setTimeout(() => {
-    console.log('=== EMERGENCY DEBUG: Dialing specialist now ===');
     try {
-      // Use 'dial' command (NOT 'redirect') to keep LLM session alive
       session.sendCommand('dial', {
         call_hook: '/dial-specialist',
         to: {
@@ -128,15 +111,15 @@ async function handleTransfer(session, tool_call_id, args) {
           trunk: 'voip.ms-jambonz'
         },
         tag: {
-          original_caller: from,
-          conversation_summary: reason,
+          conversation_summary,
           queue: call_sid
-        }
+        },
+        speech_synthesis_vendor: 'google',
+        speech_synthesis_language: 'en-US',
+        speech_synthesis_voice: 'en-US-Wavenet-C'
       });
-      console.log('=== EMERGENCY DEBUG: Dial command sent ===', {call_sid, transferNumber});
-      logger.info({transferNumber, call_sid, originalCaller: from}, 'Specialist dial via REST API');
+      logger.info({transferNumber, call_sid, conversation_summary}, 'Specialist dial command sent via REST API');
     } catch (err) {
-      console.log('=== EMERGENCY DEBUG: dial ERROR ===', err);
       logger.error({err}, 'Error dialing specialist');
     }
   }, 500);

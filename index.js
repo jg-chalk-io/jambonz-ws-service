@@ -289,10 +289,18 @@ svc.on('session:new', async (session) => {
 
   try {
     // Register event handlers for this session
-    // NOTE: /toolCall event handler REMOVED - using HTTP tools instead of client-side tools
-    // HTTP tools cause Ultravox to POST directly to /transferToOnCall endpoint, not send WebSocket events
-    // This allows AI session to end immediately when tool returns, enabling hold music to play
+    // Using CLIENT-SIDE tools (client: {}) per Jambonz ultravox-warm-transfer pattern
+    // This triggers WebSocket /toolCall events, not HTTP POST requests
     session
+      .on('/toolCall', (evt) => {
+        logger.info({evt}, 'Received /toolCall event');
+        logger.info({
+          tool_call_id: evt.tool_call_id,
+          name: evt.name,
+          args: evt.args
+        }, 'Tool call details');
+        handleToolCall(session, evt);
+      })
       .on('/llmComplete', (evt) => {
         logger.info({evt}, 'Received /llmComplete event');
         handleLlmComplete(session, evt);
@@ -304,22 +312,22 @@ svc.on('session:new', async (session) => {
       .on('/dialComplete', (evt) => {
         logger.info({evt}, 'Received /dialComplete event - transfer finished');
         // No action needed - call will end naturally
-        // Respond with empty array to acknowledge
-        session.reply([]);
+        session.send();
       })
       .on('/consultationDone', (evt) => {
         logger.info({evt}, 'Received /consultationDone event - queue operation complete');
         // Caller was dequeued and connected, or queue timed out
-        session.reply([]);
+        session.send();
       })
       .on('/wait-music', (evt) => {
         logger.info({evt}, 'Received /wait-music event - playing hold music');
         // Play hold music while caller waits in queue
-        session.reply([{
-          verb: 'play',
-          url: 'https://www.kozco.com/tech/piano2.wav',
-          loop: true
-        }]);
+        session
+          .play({
+            url: 'https://www.kozco.com/tech/piano2.wav',
+            loop: true
+          })
+          .send();
       })
       .on('call:status', (evt) => handleCallStatus(session, evt));
 
@@ -330,7 +338,7 @@ svc.on('session:new', async (session) => {
     session
       .say({text: 'Sorry, an error occurred. Please try again later.'})
       .hangup()
-      .reply();
+      .send();
   }
 });
 
@@ -366,7 +374,7 @@ specialistSvc.on('session:new', async (session) => {
         timeout: 2,
         actionHook: '/dequeue'
       })
-      .reply();
+      .send();
 
     // Handle dequeue result
     session.on('/dequeue', (evt) => {
@@ -377,7 +385,7 @@ specialistSvc.on('session:new', async (session) => {
         session
           .say({text: 'Sorry, the caller hung up.'})
           .hangup()
-          .reply();
+          .send();
       }
       // On success, calls are bridged automatically
     });
@@ -387,7 +395,7 @@ specialistSvc.on('session:new', async (session) => {
     session
       .say({text: 'Sorry, an error occurred.'})
       .hangup()
-      .reply();
+      .send();
   }
 });
 
