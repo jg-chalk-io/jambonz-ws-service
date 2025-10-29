@@ -16,9 +16,10 @@ function createToolHandlers(config) {
    * Handle transferToOnCall HTTP tool invocation
    */
   function handleTransferToOnCall(data, res) {
-    const {call_sid, urgency_reason} = data;
+    const {call_sid, urgency_reason, first_name, last_name} = data;
+    const caller_name = last_name ? `${first_name} ${last_name}` : first_name;
 
-    logger.info({call_sid, urgency_reason}, 'Transfer to on-call requested');
+    logger.info({call_sid, urgency_reason, caller_name}, 'Transfer to on-call requested');
 
     // Send immediate response to Ultravox
     res.writeHead(200, {'Content-Type': 'application/json'});
@@ -41,7 +42,8 @@ function createToolHandlers(config) {
    * Handle collectCallerInfo HTTP tool invocation
    */
   function handleCollectCallerInfo(data, res) {
-    const {call_sid, caller_name, pet_name, species, callback_number, concern_description} = data;
+    const {call_sid, first_name, last_name, pet_name, species, callback_number, concern_description} = data;
+    const caller_name = last_name ? `${first_name} ${last_name}` : first_name;
 
     logger.info({
       call_sid,

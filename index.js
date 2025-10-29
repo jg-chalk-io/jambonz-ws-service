@@ -181,11 +181,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Extract caller information
-      const caller_name = payload.caller_name || payload.parameters?.caller_name || 'Unknown';
+      const first_name = payload.first_name || payload.parameters?.first_name || 'Unknown';
+      const last_name = payload.last_name || payload.parameters?.last_name || '';
+      const caller_name = last_name ? `${first_name} ${last_name}` : first_name;
       const callback_number = payload.callback_number || payload.parameters?.callback_number || session.from;
       const concern_description = payload.concern_description || payload.parameters?.concern_description || 'No details provided';
 
-      logger.info({caller_name, callback_number, concern_description}, 'Caller info collected');
+      logger.info({first_name, last_name, caller_name, callback_number, concern_description}, 'Caller info collected');
 
       // Respond immediately to Ultravox (ends AI session)
       res.writeHead(200, {'Content-Type': 'application/json'});

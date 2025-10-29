@@ -118,11 +118,20 @@ async function handleIncomingCall(session) {
               description: 'Collect caller information when office is closed or caller cannot be transferred immediately.',
               dynamicParameters: [
                 {
-                  name: 'caller_name',
+                  name: 'first_name',
                   location: 'PARAMETER_LOCATION_BODY',
                   schema: {
                     type: 'string',
-                    description: 'Full name of the caller'
+                    description: 'Caller\'s first name'
+                  },
+                  required: true
+                },
+                {
+                  name: 'last_name',
+                  location: 'PARAMETER_LOCATION_BODY',
+                  schema: {
+                    type: 'string',
+                    description: 'Caller\'s last name'
                   },
                   required: true
                 },
