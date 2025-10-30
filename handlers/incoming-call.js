@@ -11,10 +11,10 @@ async function handleIncomingCall(session) {
 
   logger.info({from, to, account_sid}, 'Processing incoming call');
 
-  // Get client configuration
-  const client = await Client.getByAccountSid(account_sid);
+  // Get client configuration by receiving phone number (multi-tenant routing)
+  const client = await Client.getByPhoneNumber(to);
   if (!client) {
-    logger.error({account_sid}, 'No client found for account_sid');
+    logger.error({to}, 'No client found for phone number');
     session
       .say({text: 'No route found'})
       .hangup()
@@ -199,7 +199,15 @@ async function handleIncomingCall(session) {
  * Generate system prompt with client-specific variables
  */
 function generateSystemPrompt(client, isAfterHours, callerNumber) {
-  const template = isAfterHours ? getAfterHoursPrompt() : getBusinessHoursPrompt();
+  // Use database-stored prompt if available, otherwise fall back to hard-coded prompts
+  let template;
+  if (client.system_prompt) {
+    // Client has custom prompt in database - use it regardless of hours
+    template = client.system_prompt;
+  } else {
+    // Fall back to hard-coded prompts based on business hours
+    template = isAfterHours ? getAfterHoursPrompt() : getBusinessHoursPrompt();
+  }
 
   // Get last 4 digits of caller number
   const callerLast4 = callerNumber ? callerNumber.slice(-4) : '****';
@@ -215,6 +223,7 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
   });
   const currentTime = formatter.format(now);
 
+  // Replace all template variables
   return template
     .replace(/\{\{office_name\}\}/g, client.office_name || client.name)
     .replace(/\{\{office_hours\}\}/g, client.office_hours || 'Please check our website')
@@ -222,7 +231,9 @@ function generateSystemPrompt(client, isAfterHours, callerNumber) {
     .replace(/\{\{office_website\}\}/g, client.office_website || '')
     .replace(/\{\{caller_phone_last4\}\}/g, callerLast4)
     .replace(/\{\{current_time\}\}/g, currentTime)
-    .replace(/\{\{day_of_week\}\}/g, now.toLocaleDateString('en-US', {weekday: 'long'}));
+    .replace(/\{\{day_of_week\}\}/g, now.toLocaleDateString('en-US', {weekday: 'long'}))
+    .replace(/\{\{clinic_open\}\}/g, isAfterHours ? '' : 'The clinic is currently open.')
+    .replace(/\{\{clinic_closed\}\}/g, isAfterHours ? 'The clinic is currently closed.' : '');
 }
 
 function getBusinessHoursPrompt() {
