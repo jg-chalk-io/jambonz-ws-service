@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3001;
 const BASE_URL = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
 
 // Transfer configuration
-const TRANSFER_NUMBER = '+13654001512';
+const TRANSFER_NUMBER = '+13654001512';  // Phone transfer
 
 // Initialize Twilio client
 const twilioClient = twilio(
@@ -34,17 +34,20 @@ const toolHandlers = createToolHandlers({
 const server = http.createServer();
 
 /**
- * Fetch agent prompt from Ultravox and extract referenced variables
- * Returns array of variable names found in the prompt
+ * Create Ultravox call via REST API (legacy - direct call creation)
  */
-function getAgentPromptVariables(agentId) {
+function createUltravoxCall(callConfig) {
   return new Promise((resolve, reject) => {
+    const data = JSON.stringify(callConfig);
+
     const options = {
       hostname: 'api.ultravox.ai',
       port: 443,
-      path: `/api/agents/${agentId}`,
-      method: 'GET',
+      path: '/api/calls',
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
         'X-API-Key': process.env.ULTRAVOX_API_KEY
       }
     };
@@ -57,69 +60,36 @@ function getAgentPromptVariables(agentId) {
       });
 
       res.on('end', () => {
-        if (res.statusCode !== 200) {
+        // Check HTTP status code
+        if (res.statusCode !== 200 && res.statusCode !== 201) {
           logger.error({
             statusCode: res.statusCode,
-            agentId,
-            response: responseData.substring(0, 200)
-          }, 'Failed to fetch agent configuration');
-          reject(new Error(`Failed to fetch agent: ${res.statusCode}`));
+            response: responseData.substring(0, 500)
+          }, 'Ultravox API error');
+          reject(new Error(`Ultravox API returned ${res.statusCode}: ${responseData.substring(0, 200)}`));
           return;
         }
 
         try {
-          const agentData = JSON.parse(responseData);
-          const systemPrompt = agentData?.callTemplate?.systemPrompt || '';
-
-          // Extract all {{variable}} references using regex
-          const variableRegex = /\{\{(\w+)\}\}/g;
-          const variables = new Set();
-          let match;
-
-          while ((match = variableRegex.exec(systemPrompt)) !== null) {
-            variables.add(match[1]);
-          }
-
-          const varArray = Array.from(variables);
-
-          logger.info({
-            agentId,
-            variablesFound: varArray.length,
-            variables: varArray
-          }, 'Extracted template variables from agent prompt');
-
-          resolve(varArray);
+          const parsedData = JSON.parse(responseData);
+          resolve(parsedData);
         } catch (err) {
-          logger.error({err, agentId}, 'Failed to parse agent data');
+          logger.error({
+            parseError: err.message,
+            responseStart: responseData.substring(0, 200)
+          }, 'Failed to parse Ultravox response');
           reject(err);
         }
       });
     });
 
     req.on('error', (err) => {
-      logger.error({err, agentId}, 'HTTP error fetching agent');
       reject(err);
     });
 
+    req.write(data);
     req.end();
   });
-}
-
-/**
- * Filter template context to only include variables referenced in the prompt
- */
-function filterTemplateContext(fullContext, referencedVariables) {
-  const filtered = {};
-
-  for (const varName of referencedVariables) {
-    if (varName in fullContext) {
-      filtered[varName] = fullContext[varName];
-    } else {
-      logger.warn({varName}, 'Variable referenced in prompt but not available in context');
-    }
-  }
-
-  return filtered;
 }
 
 /**
@@ -255,8 +225,8 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   const isOpen = false;  // Placeholder
   const isClosed = true;  // Placeholder
 
-  // Build FULL template context with ALL available variables
-  const fullTemplateContext = {
+  // Build comprehensive template context with ALL available variables
+  const templateContext = {
     // === TWILIO CALL PARAMETERS ===
     call_sid: callSid,
     caller_phone_number: from || '',
@@ -296,22 +266,136 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     debug_mode: process.env.NODE_ENV === 'development'
   };
 
-  // Fetch agent prompt and extract referenced variables
-  const referencedVariables = await getAgentPromptVariables(clientData.ultravox_agent_id);
-
-  // Filter to only include variables referenced in the prompt
-  const templateContext = filterTemplateContext(fullTemplateContext, referencedVariables);
-
   logger.info({
     callSid,
     agentId: clientData.ultravox_agent_id,
-    totalVariablesAvailable: Object.keys(fullTemplateContext).length,
-    variablesReferenced: referencedVariables.length,
-    variablesSent: Object.keys(templateContext).length,
     templateContext
-  }, 'Using filtered template context based on agent prompt');
+  }, 'Using Ultravox Agent Template');
+
+  // NOTE: When using Agent Templates, tools must be configured in the Ultravox dashboard
+  // They cannot be passed dynamically at call creation time
+  // The tool definitions below are kept for reference only - configure these in Ultravox UI
+  /*
+  const selectedTools = [
+    {
+      temporaryTool: {
+        modelToolName: 'transferToOnCall',
+        description: 'Transfer caller to on-call veterinary technician for emergency situations',
+        dynamicParameters: [
+          {
+            name: 'urgency_reason',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {
+              type: 'string',
+              description: 'Brief description of the emergency situation'
+            },
+            required: true
+          }
+        ],
+        http: {
+          baseUrlPattern: `${BASE_URL}/twilio/transferToOnCall`,
+          httpMethod: 'POST'
+        },
+        staticParameters: [
+          {
+            name: 'call_sid',
+            location: 'PARAMETER_LOCATION_BODY',
+            value: callSid
+          }
+        ]
+      }
+    },
+    {
+      temporaryTool: {
+        modelToolName: 'collectCallerInfo',
+        description: 'Collect and store non-urgent call details',
+        dynamicParameters: [
+          {
+            name: 'caller_name',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: true
+          },
+          {
+            name: 'pet_name',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: true
+          },
+          {
+            name: 'species',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: true
+          },
+          {
+            name: 'breed',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: false
+          },
+          {
+            name: 'callback_number',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: true
+          },
+          {
+            name: 'email',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: false
+          },
+          {
+            name: 'home_vet_hospital',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: false
+          },
+          {
+            name: 'concern_description',
+            location: 'PARAMETER_LOCATION_BODY',
+            schema: {type: 'string'},
+            required: true
+          }
+        ],
+        http: {
+          baseUrlPattern: `${BASE_URL}/twilio/collectCallerInfo`,
+          httpMethod: 'POST'
+        },
+        staticParameters: [
+          {
+            name: 'call_sid',
+            location: 'PARAMETER_LOCATION_BODY',
+            value: callSid
+          }
+        ]
+      }
+    },
+    {
+      temporaryTool: {
+        modelToolName: 'hangUp',
+        description: 'End the call gracefully after completing the interaction',
+        dynamicParameters: [],
+        http: {
+          baseUrlPattern: `${BASE_URL}/twilio/hangUp`,
+          httpMethod: 'POST'
+        },
+        staticParameters: [
+          {
+            name: 'call_sid',
+            location: 'PARAMETER_LOCATION_BODY',
+            value: callSid
+          }
+        ]
+      }
+    }
+  ];
+  */
 
   // Create Ultravox call via REST API using Agent Template
+  // NOTE: Tools must be configured in the agent template itself via Ultravox dashboard
+  // They cannot be passed via selectedTools when using agent templates
   const callConfig = {
     templateContext,
     medium: {
