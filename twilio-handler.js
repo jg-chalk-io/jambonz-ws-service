@@ -336,6 +336,79 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   return twimlResponse.toString();
 }
 
+/**
+ * Handle transfer for Twilio calls using REST API
+ */
+async function handleTwilioTransfer(toolData, res) {
+  try {
+    const {call_sid, to_phone_number, conversation_summary} = toolData;
+
+    logger.info({
+      call_sid,
+      to_phone_number,
+      conversation_summary
+    }, 'Handling Twilio transfer via REST API');
+
+    if (!call_sid) {
+      throw new Error('Missing call_sid in tool data');
+    }
+
+    // Load client from database using the clinic number (to_phone_number)
+    const {supabase} = require('./lib/supabase');
+    const {data: clientData, error: clientError} = await supabase
+      .from('clients')
+      .select('*')
+      .eq('vetwise_phone', to_phone_number)
+      .single();
+
+    if (clientError || !clientData) {
+      throw new Error(`No client found for phone number ${to_phone_number}`);
+    }
+
+    if (!clientData.primary_transfer_number) {
+      throw new Error(`No primary_transfer_number configured for client ${clientData.name}`);
+    }
+
+    const transferNumber = clientData.primary_transfer_number;
+
+    logger.info({
+      call_sid,
+      transferNumber,
+      clientName: clientData.name
+    }, 'Transferring call using Twilio REST API');
+
+    // Generate TwiML to dial the transfer number
+    // Use the Twilio number (to_phone_number) as caller ID since we can't spoof
+    const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I transfer your call.</Say>
+  <Dial callerId="${to_phone_number}">${transferNumber}</Dial>
+</Response>`;
+
+    // Update the active call using Twilio REST API
+    await twilioClient.calls(call_sid).update({
+      twiml: transferTwiml
+    });
+
+    logger.info({call_sid, transferNumber}, 'Successfully initiated transfer via Twilio REST API');
+
+    // Respond to Ultravox tool call
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Transfer initiated'
+    }));
+
+  } catch (err) {
+    logger.error({err, toolData}, 'Error handling Twilio transfer');
+    res.writeHead(500, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({
+      success: false,
+      error: err.message
+    }));
+  }
+}
+
 // HTTP request handler
 server.on('request', (req, res) => {
   let body = '';
@@ -362,9 +435,9 @@ server.on('request', (req, res) => {
         res.end(twiml);
 
       } else if (req.url === '/twilio/transferToOnCall' && req.method === 'POST') {
-        // Parse JSON body for tool calls
+        // Handle Twilio transfer via REST API
         const toolData = body ? JSON.parse(body) : {};
-        toolHandlers.handleTransferToOnCall(toolData, res);
+        await handleTwilioTransfer(toolData, res);
 
       } else if (req.url === '/twilio/collectCallerInfo' && req.method === 'POST') {
         const toolData = body ? JSON.parse(body) : {};
