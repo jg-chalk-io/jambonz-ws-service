@@ -21,21 +21,34 @@ function createToolHandlers(config) {
 
     logger.info({call_sid, urgency_reason, caller_name}, 'Transfer to on-call requested');
 
-    // Send immediate response to Ultravox
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify({
-      success: true,
-      message: 'Transfer initiated'
-    }));
+    // For Twilio: Return actionUrl so Ultravox can end the stream gracefully
+    // For Jambonz: Execute transfer immediately (existing behavior)
+    if (transferTrunk === null) {
+      // Twilio platform - use actionUrl pattern
+      const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        success: true,
+        message: 'Transfer initiated',
+        actionUrl: `${baseUrl}/twilio/executeDial?number=${encodeURIComponent(transferNumber)}&reason=${encodeURIComponent(urgency_reason)}`
+      }));
+    } else {
+      // Jambonz platform - execute transfer immediately
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        success: true,
+        message: 'Transfer initiated'
+      }));
 
-    // Execute platform-specific transfer
-    executeTransfer(call_sid, urgency_reason, transferNumber, transferTrunk)
-      .then(() => {
-        logger.info({call_sid}, 'Transfer completed successfully');
-      })
-      .catch((err) => {
-        logger.error({err, call_sid}, 'Error executing transfer');
-      });
+      // Execute platform-specific transfer
+      executeTransfer(call_sid, urgency_reason, transferNumber, transferTrunk)
+        .then(() => {
+          logger.info({call_sid}, 'Transfer completed successfully');
+        })
+        .catch((err) => {
+          logger.error({err, call_sid}, 'Error executing transfer');
+        });
+    }
   }
 
   /**

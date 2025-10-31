@@ -222,6 +222,25 @@ server.on('request', (req, res) => {
         const toolData = body ? JSON.parse(body) : {};
         toolHandlers.handleHangUp(toolData, res);
 
+      } else if (req.url.startsWith('/twilio/executeDial')) {
+        // Called by Twilio after Ultravox ends the stream
+        // Extract parameters from query string
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const number = url.searchParams.get('number') || TRANSFER_NUMBER;
+        const reason = url.searchParams.get('reason') || 'emergency';
+
+        logger.info({number, reason}, 'Executing dial after Ultravox stream ended');
+
+        // Return TwiML with Dial verb
+        const dialTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Connecting you to our on-call team now.</Say>
+  <Dial>${number}</Dial>
+</Response>`;
+
+        res.writeHead(200, {'Content-Type': 'text/xml'});
+        res.end(dialTwiml);
+
       } else if (req.url === '/health') {
         res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({status: 'healthy', platform: 'twilio'}));
