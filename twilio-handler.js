@@ -34,7 +34,7 @@ const toolHandlers = createToolHandlers({
 const server = http.createServer();
 
 /**
- * Create Ultravox call via REST API
+ * Create Ultravox call via REST API (legacy - direct call creation)
  */
 function createUltravoxCall(callConfig) {
   return new Promise((resolve, reject) => {
@@ -93,11 +93,111 @@ function createUltravoxCall(callConfig) {
 }
 
 /**
+ * Create Ultravox call using Agent Template with templateContext
+ */
+function createUltravoxCallWithAgent(agentId, callConfig) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(callConfig);
+
+    const options = {
+      hostname: 'api.ultravox.ai',
+      port: 443,
+      path: `/api/agents/${agentId}/calls`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
+        'X-API-Key': process.env.ULTRAVOX_API_KEY
+      }
+    };
+
+    logger.info({
+      agentId,
+      path: options.path,
+      configSize: data.length
+    }, 'Creating Ultravox call with Agent Template');
+
+    const req = https.request(options, (res) => {
+      let responseData = '';
+
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+
+      res.on('end', () => {
+        // Check HTTP status code
+        if (res.statusCode !== 200 && res.statusCode !== 201) {
+          logger.error({
+            statusCode: res.statusCode,
+            agentId,
+            response: responseData.substring(0, 500)
+          }, 'Ultravox Agent API error');
+          reject(new Error(`Ultravox Agent API returned ${res.statusCode}: ${responseData.substring(0, 200)}`));
+          return;
+        }
+
+        try {
+          const parsedData = JSON.parse(responseData);
+          resolve(parsedData);
+        } catch (err) {
+          logger.error({
+            parseError: err.message,
+            agentId,
+            responseStart: responseData.substring(0, 200)
+          }, 'Failed to parse Ultravox Agent response');
+          reject(err);
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      logger.error({err, agentId}, 'HTTP request error to Ultravox Agent API');
+      reject(err);
+    });
+
+    req.write(data);
+    req.end();
+  });
+}
+
+/**
  * Generate TwiML for incoming call with Ultravox connection
  */
 async function generateIncomingCallTwiML(from, to, callSid) {
-  // Load agent definition - pass clinic number (to) and caller number (from)
-  const systemPrompt = await loadAgentDefinition(to, from);
+  // Load client from database using the clinic number (to)
+  const {supabase} = require('./lib/supabase');
+  const {data: clientData, error: clientError} = await supabase
+    .from('clients')
+    .select('*')
+    .eq('vetwise_phone', to)
+    .single();
+
+  if (clientError || !clientData) {
+    throw new Error(`No client found for phone number ${to}`);
+  }
+
+  if (!clientData.ultravox_agent_id) {
+    throw new Error(`No ultravox_agent_id configured for client ${clientData.name}`);
+  }
+
+  // Get last 4 digits of caller number
+  const callerLast4 = from ? from.slice(-4) : '****';
+
+  // Build template context with variable values
+  const templateContext = {
+    office_name: clientData.office_name || clientData.name,
+    agent_name: 'Jessica',
+    office_hours: clientData.office_hours || 'Please check our website',
+    caller_phone_last4: callerLast4,
+    clinic_open: false,  // TODO: Add business hours check
+    clinic_closed: true  // TODO: Add business hours check
+  };
+
+  logger.info({
+    callSid,
+    agentId: clientData.ultravox_agent_id,
+    templateContext
+  }, 'Using Ultravox Agent Template');
 
   // Build tool definitions for Ultravox
   const selectedTools = [
@@ -216,26 +316,16 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     }
   ];
 
-  // Create Ultravox call via REST API
-  logger.info({
-    callSid,
-    promptLength: systemPrompt.length,
-    toolsCount: selectedTools.length
-  }, 'Creating Ultravox call');
-
+  // Create Ultravox call via REST API using Agent Template
   const callConfig = {
-    systemPrompt,
-    model: 'fixie-ai/ultravox',
-    voice: 'Jessica',
-    temperature: 0.1,
-    firstSpeaker: 'FIRST_SPEAKER_AGENT',
+    templateContext,
     selectedTools,
     medium: {
       twilio: {}
     }
   };
 
-  const ultravoxResponse = await createUltravoxCall(callConfig);
+  const ultravoxResponse = await createUltravoxCallWithAgent(clientData.ultravox_agent_id, callConfig);
   logger.info({callSid, ultravoxResponse}, 'Got Ultravox joinUrl');
 
   // Generate TwiML with joinUrl from Ultravox
