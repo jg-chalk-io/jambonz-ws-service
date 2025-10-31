@@ -199,7 +199,10 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     templateContext
   }, 'Using Ultravox Agent Template');
 
-  // Build tool definitions for Ultravox
+  // NOTE: When using Agent Templates, tools must be configured in the Ultravox dashboard
+  // They cannot be passed dynamically at call creation time
+  // The tool definitions below are kept for reference only - configure these in Ultravox UI
+  /*
   const selectedTools = [
     {
       temporaryTool: {
@@ -315,11 +318,13 @@ async function generateIncomingCallTwiML(from, to, callSid) {
       }
     }
   ];
+  */
 
   // Create Ultravox call via REST API using Agent Template
+  // NOTE: Tools must be configured in the agent template itself via Ultravox dashboard
+  // They cannot be passed via selectedTools when using agent templates
   const callConfig = {
     templateContext,
-    selectedTools,
     medium: {
       twilio: {}
     }
