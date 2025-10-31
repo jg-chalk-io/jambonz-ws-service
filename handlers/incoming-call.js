@@ -36,7 +36,7 @@ async function handleIncomingCall(session) {
   if (!client.ultravox_agent_id) {
     logger.error({client: client.name}, 'No ultravox_agent_id configured');
     session
-      .say({text: 'Sorry, this service is not yet configured. Please call back later.'})
+      .say({text: 'I\'m sorry but no agent is configured. Please contact VetWise support.'})
       .hangup()
       .reply();
     return;
