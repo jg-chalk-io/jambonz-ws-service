@@ -15,11 +15,15 @@ import argparse
 import requests
 from datetime import datetime
 from supabase import create_client, Client
+import dotenv
+
+dotenv.load_dotenv()
 
 # Load environment variables
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
 ULTRAVOX_API_KEY = os.environ.get('ULTRAVOX_API_KEY')
+BASE_URL = os.environ.get('BASE_URL', 'https://jambonz-ws-service-production.up.railway.app')
 
 if not all([SUPABASE_URL, SUPABASE_SERVICE_KEY, ULTRAVOX_API_KEY]):
     print("ERROR: Missing required environment variables")
@@ -28,6 +32,33 @@ if not all([SUPABASE_URL, SUPABASE_SERVICE_KEY, ULTRAVOX_API_KEY]):
 
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+
+def get_standard_tools():
+    """Get standard tools that all agents should have"""
+    return [
+        {
+            "temporaryTool": {
+                "modelToolName": "transferToOnCall",
+                "description": "Transfer the call to the on-call emergency team when the caller has an emergency or urgent situation that requires immediate veterinary attention. Use this when the situation cannot wait.",
+                "dynamicParameters": [
+                    {
+                        "name": "conversation_summary",
+                        "location": "PARAMETER_LOCATION_BODY",
+                        "schema": {
+                            "description": "Brief summary of the conversation and reason for transfer",
+                            "type": "string"
+                        },
+                        "required": True
+                    }
+                ],
+                "http": {
+                    "baseUrlPattern": f"{BASE_URL}/twilio/transferToOnCall",
+                    "httpMethod": "POST"
+                }
+            }
+        }
+    ]
 
 
 def get_ultravox_agent(agent_id):
@@ -48,23 +79,26 @@ def get_ultravox_agent(agent_id):
         raise Exception(f"Failed to fetch agent {agent_id}: {response.status_code} {response.text}")
 
 
-def update_ultravox_agent(agent_id, system_prompt, voice=None):
+def update_ultravox_agent(agent_id, system_prompt, voice=None, tools=None):
     """Update Ultravox agent template"""
     url = f"https://api.ultravox.ai/api/agents/{agent_id}"
     headers = {
         'X-API-Key': ULTRAVOX_API_KEY,
         'Content-Type': 'application/json'
     }
-    
+
     payload = {
         'systemPrompt': system_prompt
     }
-    
+
     if voice:
         payload['voice'] = voice
-    
+
+    if tools is not None:
+        payload['selectedTools'] = tools
+
     response = requests.patch(url, headers=headers, json=payload)
-    
+
     if response.status_code in [200, 201]:
         return response.json()
     else:
@@ -101,28 +135,52 @@ def sync_agent(client_data, dry_run=False):
         
         current_prompt = current_agent.get('systemPrompt', '')
         current_voice = current_agent.get('voice', '')
-        
+        current_tools = current_agent.get('callTemplate', {}).get('selectedTools', [])
+
+        # Get standard tools
+        standard_tools = get_standard_tools()
+
         # Check if update needed
         prompt_changed = current_prompt != system_prompt
         voice_changed = current_voice != agent_voice
-        
-        if not prompt_changed and not voice_changed:
+        tools_changed = json.dumps(current_tools, sort_keys=True) != json.dumps(standard_tools, sort_keys=True)
+
+        if not prompt_changed and not voice_changed and not tools_changed:
             print(f"  ✓ Already in sync")
             return {'status': 'already_synced'}
-        
+
         if prompt_changed:
             print(f"  📝 Prompt changed ({len(current_prompt)} → {len(system_prompt)} chars)")
         if voice_changed:
             print(f"  🔊 Voice changed ({current_voice} → {agent_voice})")
-        
+        if tools_changed:
+            print(f"  🔧 Tools changed ({len(current_tools)} → {len(standard_tools)} tools)")
+
         if dry_run:
             print(f"  [DRY RUN] Would update agent template")
             return {'status': 'would_update', 'dry_run': True}
-        
+
         # Update Ultravox
-        updated_agent = update_ultravox_agent(agent_id, system_prompt, agent_voice)
-        
-        print(f"  ✅ Successfully synced")
+        updated_agent = update_ultravox_agent(
+            agent_id,
+            system_prompt,
+            agent_voice,
+            tools=standard_tools if tools_changed else None
+        )
+
+        # Mark as synced in database
+        client_id = client_data.get('id')
+        if client_id:
+            try:
+                supabase.table('clients').update({
+                    'prompt_needs_sync': False,
+                    'prompt_last_synced': datetime.now().isoformat(),
+                    'prompt_sync_error': None
+                }).eq('id', client_id).execute()
+                print(f"  ✅ Successfully synced and marked as synced in database")
+            except Exception as db_err:
+                print(f"  ⚠️  Synced to Ultravox but failed to update database: {str(db_err)}")
+
         return {'status': 'success', 'updated_at': datetime.now().isoformat()}
         
     except Exception as e:
