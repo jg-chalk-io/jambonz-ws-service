@@ -1,5 +1,6 @@
 require('dotenv').config();
 const http = require('http');
+const https = require('https');
 const twilio = require('twilio');
 const pino = require('pino');
 const {loadAgentDefinition} = require('./shared/agent-config');
@@ -33,22 +34,59 @@ const toolHandlers = createToolHandlers({
 const server = http.createServer();
 
 /**
+ * Create Ultravox call via REST API
+ */
+function createUltravoxCall(callConfig) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(callConfig);
+
+    const options = {
+      hostname: 'api.ultravox.ai',
+      port: 443,
+      path: '/api/calls',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
+        'X-API-Key': process.env.ULTRAVOX_API_KEY
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let responseData = '';
+
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+
+      res.on('end', () => {
+        try {
+          const parsedData = JSON.parse(responseData);
+          resolve(parsedData);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.write(data);
+    req.end();
+  });
+}
+
+/**
  * Generate TwiML for incoming call with Ultravox connection
  */
 async function generateIncomingCallTwiML(from, to, callSid) {
   // Load agent definition - pass clinic number (to) and caller number (from)
   const systemPrompt = await loadAgentDefinition(to, from);
 
-  // Escape XML special characters in system prompt
-  const escapedPrompt = systemPrompt
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
   // Build tool definitions for Ultravox
-  const tools = [
+  const selectedTools = [
     {
       temporaryTool: {
         modelToolName: 'transferToOnCall',
@@ -164,24 +202,33 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     }
   ];
 
-  // Generate TwiML with Ultravox Stream connection
-  // Per Ultravox docs: https://docs.ultravox.ai/telephony/supported-providers#twilio
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Connect>
-    <Stream url="wss://api.ultravox.ai/stream">
-      <Parameter name="apiKey" value="${process.env.ULTRAVOX_API_KEY}" />
-      <Parameter name="systemPrompt" value="${escapedPrompt}" />
-      <Parameter name="voice" value="Jessica" />
-      <Parameter name="model" value="fixie-ai/ultravox" />
-      <Parameter name="temperature" value="0.1" />
-      <Parameter name="firstSpeaker" value="FIRST_SPEAKER_AGENT" />
-      <Parameter name="selectedTools" value="${JSON.stringify(tools).replace(/"/g, '&quot;')}" />
-    </Stream>
-  </Connect>
-</Response>`;
+  // Create Ultravox call via REST API
+  logger.info({callSid}, 'Creating Ultravox call');
 
-  return twiml;
+  const callConfig = {
+    systemPrompt,
+    model: 'fixie-ai/ultravox',
+    voice: 'Jessica',
+    temperature: 0.1,
+    firstSpeaker: 'FIRST_SPEAKER_AGENT',
+    selectedTools,
+    medium: {
+      twilio: {}
+    }
+  };
+
+  const ultravoxResponse = await createUltravoxCall(callConfig);
+  logger.info({callSid, ultravoxResponse}, 'Got Ultravox joinUrl');
+
+  // Generate TwiML with joinUrl from Ultravox
+  const twimlResponse = new twilio.twiml.VoiceResponse();
+  const connect = twimlResponse.connect();
+  connect.stream({
+    url: ultravoxResponse.joinUrl,
+    name: 'ultravox'
+  });
+
+  return twimlResponse.toString();
 }
 
 // HTTP request handler
