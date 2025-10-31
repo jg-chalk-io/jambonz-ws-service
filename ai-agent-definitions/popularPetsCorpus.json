@@ -1,0 +1,1630 @@
+{
+  "pets": [
+    {
+      "id": 1,
+      "species": "Dog",
+      "breed": "Labrador Retriever",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Lab", "Labrador"]
+    },
+    {
+      "id": 2,
+      "species": "Dog",
+      "breed": "German Shepherd",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["GSD", "Alsatian"]
+    },
+    {
+      "id": 3,
+      "species": "Dog",
+      "breed": "Golden Retriever",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Golden"]
+    },
+    {
+      "id": 4,
+      "species": "Dog",
+      "breed": "French Bulldog",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Frenchie"]
+    },
+    {
+      "id": 5,
+      "species": "Dog",
+      "breed": "Bulldog",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["English Bulldog"]
+    },
+    {
+      "id": 6,
+      "species": "Dog",
+      "breed": "Poodle",
+      "category": "Canine",
+      "size": "Varies",
+      "commonNames": ["Standard Poodle", "Miniature Poodle", "Toy Poodle"]
+    },
+    {
+      "id": 7,
+      "species": "Dog",
+      "breed": "Beagle",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 8,
+      "species": "Dog",
+      "breed": "Rottweiler",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Rottie"]
+    },
+    {
+      "id": 9,
+      "species": "Dog",
+      "breed": "Yorkshire Terrier",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": ["Yorkie"]
+    },
+    {
+      "id": 10,
+      "species": "Dog",
+      "breed": "Dachshund",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Wiener Dog", "Doxie"]
+    },
+    {
+      "id": 11,
+      "species": "Dog",
+      "breed": "Boxer",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 12,
+      "species": "Dog",
+      "breed": "Australian Shepherd",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["Aussie"]
+    },
+    {
+      "id": 13,
+      "species": "Dog",
+      "breed": "Siberian Husky",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["Husky"]
+    },
+    {
+      "id": 14,
+      "species": "Dog",
+      "breed": "Great Dane",
+      "category": "Canine",
+      "size": "Giant",
+      "commonNames": []
+    },
+    {
+      "id": 15,
+      "species": "Dog",
+      "breed": "Doberman Pinscher",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Doberman", "Dobie"]
+    },
+    {
+      "id": 16,
+      "species": "Dog",
+      "breed": "Shih Tzu",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": []
+    },
+    {
+      "id": 17,
+      "species": "Dog",
+      "breed": "Boston Terrier",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 18,
+      "species": "Dog",
+      "breed": "Pomeranian",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": ["Pom"]
+    },
+    {
+      "id": 19,
+      "species": "Dog",
+      "breed": "Cavalier King Charles Spaniel",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Cavalier"]
+    },
+    {
+      "id": 20,
+      "species": "Dog",
+      "breed": "Pembroke Welsh Corgi",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Corgi"]
+    },
+    {
+      "id": 21,
+      "species": "Dog",
+      "breed": "Cocker Spaniel",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["American Cocker Spaniel"]
+    },
+    {
+      "id": 22,
+      "species": "Dog",
+      "breed": "Chihuahua",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": []
+    },
+    {
+      "id": 23,
+      "species": "Dog",
+      "breed": "Maltese",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": []
+    },
+    {
+      "id": 24,
+      "species": "Dog",
+      "breed": "Border Collie",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 25,
+      "species": "Dog",
+      "breed": "Pug",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 26,
+      "species": "Dog",
+      "breed": "Bernese Mountain Dog",
+      "category": "Canine",
+      "size": "Giant",
+      "commonNames": ["Berner"]
+    },
+    {
+      "id": 27,
+      "species": "Dog",
+      "breed": "Shetland Sheepdog",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Sheltie"]
+    },
+    {
+      "id": 28,
+      "species": "Dog",
+      "breed": "Miniature Schnauzer",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Schnauzer"]
+    },
+    {
+      "id": 29,
+      "species": "Dog",
+      "breed": "Mastiff",
+      "category": "Canine",
+      "size": "Giant",
+      "commonNames": ["English Mastiff"]
+    },
+    {
+      "id": 30,
+      "species": "Dog",
+      "breed": "Havanese",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 31,
+      "species": "Dog",
+      "breed": "Pit Bull Terrier",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["Pit Bull", "APBT"]
+    },
+    {
+      "id": 32,
+      "species": "Dog",
+      "breed": "Goldendoodle",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 33,
+      "species": "Dog",
+      "breed": "Labradoodle",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 34,
+      "species": "Dog",
+      "breed": "Bichon Frise",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Bichon"]
+    },
+    {
+      "id": 35,
+      "species": "Dog",
+      "breed": "Weimaraner",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 36,
+      "species": "Cat",
+      "breed": "Domestic Shorthair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["DSH", "Mixed Breed"]
+    },
+    {
+      "id": 37,
+      "species": "Cat",
+      "breed": "Domestic Longhair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["DLH"]
+    },
+    {
+      "id": 38,
+      "species": "Cat",
+      "breed": "Maine Coon",
+      "category": "Feline",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 39,
+      "species": "Cat",
+      "breed": "Siamese",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 40,
+      "species": "Cat",
+      "breed": "Persian",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 41,
+      "species": "Cat",
+      "breed": "Ragdoll",
+      "category": "Feline",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 42,
+      "species": "Cat",
+      "breed": "British Shorthair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 43,
+      "species": "Cat",
+      "breed": "Bengal",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 44,
+      "species": "Cat",
+      "breed": "Sphynx",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["Hairless Cat"]
+    },
+    {
+      "id": 45,
+      "species": "Cat",
+      "breed": "Scottish Fold",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 46,
+      "species": "Cat",
+      "breed": "Abyssinian",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["Aby"]
+    },
+    {
+      "id": 47,
+      "species": "Cat",
+      "breed": "Russian Blue",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 48,
+      "species": "Cat",
+      "breed": "Norwegian Forest Cat",
+      "category": "Feline",
+      "size": "Large",
+      "commonNames": ["Wegie"]
+    },
+    {
+      "id": 49,
+      "species": "Cat",
+      "breed": "Birman",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 50,
+      "species": "Cat",
+      "breed": "American Shorthair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 51,
+      "species": "Cat",
+      "breed": "Oriental Shorthair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 52,
+      "species": "Cat",
+      "breed": "Devon Rex",
+      "category": "Feline",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 53,
+      "species": "Cat",
+      "breed": "Burmese",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 54,
+      "species": "Cat",
+      "breed": "Exotic Shorthair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 55,
+      "species": "Cat",
+      "breed": "Tonkinese",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 56,
+      "species": "Rabbit",
+      "breed": "Holland Lop",
+      "category": "Lagomorph",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 57,
+      "species": "Rabbit",
+      "breed": "Netherland Dwarf",
+      "category": "Lagomorph",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 58,
+      "species": "Rabbit",
+      "breed": "Mini Rex",
+      "category": "Lagomorph",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 59,
+      "species": "Rabbit",
+      "breed": "Lionhead",
+      "category": "Lagomorph",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 60,
+      "species": "Rabbit",
+      "breed": "Flemish Giant",
+      "category": "Lagomorph",
+      "size": "Giant",
+      "commonNames": []
+    },
+    {
+      "id": 61,
+      "species": "Rabbit",
+      "breed": "English Lop",
+      "category": "Lagomorph",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 62,
+      "species": "Rabbit",
+      "breed": "Rex",
+      "category": "Lagomorph",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 63,
+      "species": "Rabbit",
+      "breed": "Californian",
+      "category": "Lagomorph",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 64,
+      "species": "Guinea Pig",
+      "breed": "American",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Short-haired Guinea Pig"]
+    },
+    {
+      "id": 65,
+      "species": "Guinea Pig",
+      "breed": "Abyssinian",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Rosette Guinea Pig"]
+    },
+    {
+      "id": 66,
+      "species": "Guinea Pig",
+      "breed": "Peruvian",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Long-haired Guinea Pig"]
+    },
+    {
+      "id": 67,
+      "species": "Guinea Pig",
+      "breed": "Silkie",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Sheltie"]
+    },
+    {
+      "id": 68,
+      "species": "Guinea Pig",
+      "breed": "Skinny Pig",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Hairless Guinea Pig"]
+    },
+    {
+      "id": 69,
+      "species": "Hamster",
+      "breed": "Syrian",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Golden Hamster", "Teddy Bear Hamster"]
+    },
+    {
+      "id": 70,
+      "species": "Hamster",
+      "breed": "Dwarf Campbell Russian",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Campbell's Hamster"]
+    },
+    {
+      "id": 71,
+      "species": "Hamster",
+      "breed": "Dwarf Winter White Russian",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Winter White"]
+    },
+    {
+      "id": 72,
+      "species": "Hamster",
+      "breed": "Roborovski",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Robo Hamster"]
+    },
+    {
+      "id": 73,
+      "species": "Hamster",
+      "breed": "Chinese",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 74,
+      "species": "Rat",
+      "breed": "Fancy Rat",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Domestic Rat"]
+    },
+    {
+      "id": 75,
+      "species": "Rat",
+      "breed": "Dumbo Rat",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 76,
+      "species": "Rat",
+      "breed": "Hairless Rat",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 77,
+      "species": "Mouse",
+      "breed": "Fancy Mouse",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Domestic Mouse"]
+    },
+    {
+      "id": 78,
+      "species": "Gerbil",
+      "breed": "Mongolian Gerbil",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": ["Desert Rat"]
+    },
+    {
+      "id": 79,
+      "species": "Chinchilla",
+      "breed": "Standard Grey",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 80,
+      "species": "Chinchilla",
+      "breed": "Beige",
+      "category": "Rodent",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 81,
+      "species": "Ferret",
+      "breed": "Domestic Ferret",
+      "category": "Mustelid",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 82,
+      "species": "Hedgehog",
+      "breed": "African Pygmy",
+      "category": "Erinaceidae",
+      "size": "Small",
+      "commonNames": ["Four-toed Hedgehog"]
+    },
+    {
+      "id": 83,
+      "species": "Bird",
+      "breed": "Budgerigar",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": ["Budgie", "Parakeet"]
+    },
+    {
+      "id": 84,
+      "species": "Bird",
+      "breed": "Cockatiel",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 85,
+      "species": "Bird",
+      "breed": "Lovebird",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 86,
+      "species": "Bird",
+      "breed": "Canary",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 87,
+      "species": "Bird",
+      "breed": "Finch",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": ["Zebra Finch", "Society Finch"]
+    },
+    {
+      "id": 88,
+      "species": "Bird",
+      "breed": "Conure",
+      "category": "Avian",
+      "size": "Medium",
+      "commonNames": ["Green Cheek Conure", "Sun Conure"]
+    },
+    {
+      "id": 89,
+      "species": "Bird",
+      "breed": "African Grey Parrot",
+      "category": "Avian",
+      "size": "Large",
+      "commonNames": ["Grey Parrot"]
+    },
+    {
+      "id": 90,
+      "species": "Bird",
+      "breed": "Macaw",
+      "category": "Avian",
+      "size": "Large",
+      "commonNames": ["Blue and Gold Macaw", "Scarlet Macaw"]
+    },
+    {
+      "id": 91,
+      "species": "Bird",
+      "breed": "Cockatoo",
+      "category": "Avian",
+      "size": "Large",
+      "commonNames": ["Umbrella Cockatoo", "Sulphur-crested Cockatoo"]
+    },
+    {
+      "id": 92,
+      "species": "Bird",
+      "breed": "Amazon Parrot",
+      "category": "Avian",
+      "size": "Medium",
+      "commonNames": ["Blue-fronted Amazon", "Yellow-naped Amazon"]
+    },
+    {
+      "id": 93,
+      "species": "Bird",
+      "breed": "Quaker Parrot",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": ["Monk Parakeet"]
+    },
+    {
+      "id": 94,
+      "species": "Bird",
+      "breed": "Parrotlet",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": ["Pacific Parrotlet"]
+    },
+    {
+      "id": 95,
+      "species": "Bird",
+      "breed": "Chicken",
+      "category": "Avian",
+      "size": "Medium",
+      "commonNames": ["Backyard Chicken"]
+    },
+    {
+      "id": 96,
+      "species": "Bird",
+      "breed": "Duck",
+      "category": "Avian",
+      "size": "Medium",
+      "commonNames": ["Domestic Duck", "Pekin Duck"]
+    },
+    {
+      "id": 97,
+      "species": "Fish",
+      "breed": "Goldfish",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 98,
+      "species": "Fish",
+      "breed": "Betta",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": ["Siamese Fighting Fish"]
+    },
+    {
+      "id": 99,
+      "species": "Fish",
+      "breed": "Guppy",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": ["Millionfish"]
+    },
+    {
+      "id": 100,
+      "species": "Fish",
+      "breed": "Neon Tetra",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 101,
+      "species": "Fish",
+      "breed": "Angelfish",
+      "category": "Aquatic",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 102,
+      "species": "Fish",
+      "breed": "Molly",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": ["Sailfin Molly"]
+    },
+    {
+      "id": 103,
+      "species": "Fish",
+      "breed": "Platy",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 104,
+      "species": "Fish",
+      "breed": "Swordtail",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 105,
+      "species": "Fish",
+      "breed": "Gourami",
+      "category": "Aquatic",
+      "size": "Medium",
+      "commonNames": ["Dwarf Gourami", "Pearl Gourami"]
+    },
+    {
+      "id": 106,
+      "species": "Fish",
+      "breed": "Corydoras Catfish",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": ["Cory Cat"]
+    },
+    {
+      "id": 107,
+      "species": "Fish",
+      "breed": "Plecostomus",
+      "category": "Aquatic",
+      "size": "Large",
+      "commonNames": ["Pleco", "Sucker Fish"]
+    },
+    {
+      "id": 108,
+      "species": "Fish",
+      "breed": "Oscar",
+      "category": "Aquatic",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 109,
+      "species": "Fish",
+      "breed": "Discus",
+      "category": "Aquatic",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 110,
+      "species": "Fish",
+      "breed": "Koi",
+      "category": "Aquatic",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 111,
+      "species": "Fish",
+      "breed": "Clownfish",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": ["Nemo"]
+    },
+    {
+      "id": 112,
+      "species": "Fish",
+      "breed": "Blue Tang",
+      "category": "Aquatic",
+      "size": "Medium",
+      "commonNames": ["Regal Tang", "Dory"]
+    },
+    {
+      "id": 113,
+      "species": "Fish",
+      "breed": "Yellow Tang",
+      "category": "Aquatic",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 114,
+      "species": "Reptile",
+      "breed": "Bearded Dragon",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": ["Beardie"]
+    },
+    {
+      "id": 115,
+      "species": "Reptile",
+      "breed": "Leopard Gecko",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 116,
+      "species": "Reptile",
+      "breed": "Crested Gecko",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 117,
+      "species": "Reptile",
+      "breed": "Ball Python",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": ["Royal Python"]
+    },
+    {
+      "id": 118,
+      "species": "Reptile",
+      "breed": "Corn Snake",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 119,
+      "species": "Reptile",
+      "breed": "Red-eared Slider",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": ["RES"]
+    },
+    {
+      "id": 120,
+      "species": "Reptile",
+      "breed": "Russian Tortoise",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": ["Horsfield's Tortoise"]
+    },
+    {
+      "id": 121,
+      "species": "Reptile",
+      "breed": "Sulcata Tortoise",
+      "category": "Reptile",
+      "size": "Giant",
+      "commonNames": ["African Spurred Tortoise"]
+    },
+    {
+      "id": 122,
+      "species": "Reptile",
+      "breed": "Blue Tongue Skink",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 123,
+      "species": "Reptile",
+      "breed": "Iguana",
+      "category": "Reptile",
+      "size": "Large",
+      "commonNames": ["Green Iguana"]
+    },
+    {
+      "id": 124,
+      "species": "Reptile",
+      "breed": "Chameleon",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": ["Veiled Chameleon", "Panther Chameleon"]
+    },
+    {
+      "id": 125,
+      "species": "Amphibian",
+      "breed": "Axolotl",
+      "category": "Amphibian",
+      "size": "Medium",
+      "commonNames": ["Mexican Walking Fish"]
+    },
+    {
+      "id": 126,
+      "species": "Amphibian",
+      "breed": "Fire-bellied Toad",
+      "category": "Amphibian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 127,
+      "species": "Amphibian",
+      "breed": "Whites Tree Frog",
+      "category": "Amphibian",
+      "size": "Medium",
+      "commonNames": ["Dumpy Tree Frog"]
+    },
+    {
+      "id": 128,
+      "species": "Amphibian",
+      "breed": "Pacman Frog",
+      "category": "Amphibian",
+      "size": "Medium",
+      "commonNames": ["Horned Frog"]
+    },
+    {
+      "id": 129,
+      "species": "Invertebrate",
+      "breed": "Hermit Crab",
+      "category": "Crustacean",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 130,
+      "species": "Invertebrate",
+      "breed": "Tarantula",
+      "category": "Arachnid",
+      "size": "Small",
+      "commonNames": ["Chilean Rose Hair", "Mexican Red Knee"]
+    },
+    {
+      "id": 131,
+      "species": "Dog",
+      "breed": "Jack Russell Terrier",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["JRT"]
+    },
+    {
+      "id": 132,
+      "species": "Dog",
+      "breed": "English Springer Spaniel",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["Springer"]
+    },
+    {
+      "id": 133,
+      "species": "Dog",
+      "breed": "Newfoundland",
+      "category": "Canine",
+      "size": "Giant",
+      "commonNames": ["Newfie"]
+    },
+    {
+      "id": 134,
+      "species": "Dog",
+      "breed": "Rhodesian Ridgeback",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 135,
+      "species": "Dog",
+      "breed": "Akita",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 136,
+      "species": "Dog",
+      "breed": "Staffordshire Bull Terrier",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["Staffie"]
+    },
+    {
+      "id": 137,
+      "species": "Dog",
+      "breed": "Vizsla",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": ["Hungarian Vizsla"]
+    },
+    {
+      "id": 138,
+      "species": "Dog",
+      "breed": "Cane Corso",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 139,
+      "species": "Dog",
+      "breed": "Shiba Inu",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 140,
+      "species": "Dog",
+      "breed": "Basset Hound",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 141,
+      "species": "Dog",
+      "breed": "Pointer",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["English Pointer", "German Shorthaired Pointer"]
+    },
+    {
+      "id": 142,
+      "species": "Dog",
+      "breed": "Bloodhound",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 143,
+      "species": "Dog",
+      "breed": "Papillon",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": []
+    },
+    {
+      "id": 144,
+      "species": "Dog",
+      "breed": "Samoyed",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 145,
+      "species": "Dog",
+      "breed": "West Highland White Terrier",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": ["Westie"]
+    },
+    {
+      "id": 146,
+      "species": "Dog",
+      "breed": "Belgian Malinois",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Malinois"]
+    },
+    {
+      "id": 147,
+      "species": "Dog",
+      "breed": "Alaskan Malamute",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Malamute"]
+    },
+    {
+      "id": 148,
+      "species": "Dog",
+      "breed": "Irish Setter",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 149,
+      "species": "Dog",
+      "breed": "Bull Terrier",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 150,
+      "species": "Dog",
+      "breed": "Collie",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": ["Rough Collie", "Lassie Dog"]
+    },
+    {
+      "id": 151,
+      "species": "Cat",
+      "breed": "Turkish Angora",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 152,
+      "species": "Cat",
+      "breed": "Munchkin",
+      "category": "Feline",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 153,
+      "species": "Cat",
+      "breed": "Savannah",
+      "category": "Feline",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 154,
+      "species": "Cat",
+      "breed": "Himalayan",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 155,
+      "species": "Cat",
+      "breed": "Bombay",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 156,
+      "species": "Cat",
+      "breed": "Cornish Rex",
+      "category": "Feline",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 157,
+      "species": "Cat",
+      "breed": "Ragamuffin",
+      "category": "Feline",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 158,
+      "species": "Cat",
+      "breed": "Somali",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 159,
+      "species": "Cat",
+      "breed": "Manx",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 160,
+      "species": "Cat",
+      "breed": "Chartreux",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 161,
+      "species": "Fish",
+      "breed": "Zebra Danio",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": ["Zebrafish"]
+    },
+    {
+      "id": 162,
+      "species": "Fish",
+      "breed": "Cherry Barb",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 163,
+      "species": "Fish",
+      "breed": "Rainbowfish",
+      "category": "Aquatic",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 164,
+      "species": "Fish",
+      "breed": "Cardinal Tetra",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 165,
+      "species": "Fish",
+      "breed": "Harlequin Rasbora",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 166,
+      "species": "Fish",
+      "breed": "Killifish",
+      "category": "Aquatic",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 167,
+      "species": "Reptile",
+      "breed": "Boa Constrictor",
+      "category": "Reptile",
+      "size": "Large",
+      "commonNames": ["Red-tailed Boa"]
+    },
+    {
+      "id": 168,
+      "species": "Reptile",
+      "breed": "California Kingsnake",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 169,
+      "species": "Reptile",
+      "breed": "Milk Snake",
+      "category": "Reptile",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 170,
+      "species": "Reptile",
+      "breed": "Painted Turtle",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 171,
+      "species": "Reptile",
+      "breed": "Box Turtle",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": ["Eastern Box Turtle"]
+    },
+    {
+      "id": 172,
+      "species": "Reptile",
+      "breed": "Greek Tortoise",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": ["Spur-thighed Tortoise"]
+    },
+    {
+      "id": 173,
+      "species": "Reptile",
+      "breed": "Hermann's Tortoise",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 174,
+      "species": "Reptile",
+      "breed": "Anole",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": ["Green Anole", "Carolina Anole"]
+    },
+    {
+      "id": 175,
+      "species": "Reptile",
+      "breed": "Day Gecko",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": ["Madagascar Day Gecko"]
+    },
+    {
+      "id": 176,
+      "species": "Bird",
+      "breed": "Pionus Parrot",
+      "category": "Avian",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 177,
+      "species": "Bird",
+      "breed": "Senegal Parrot",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 178,
+      "species": "Bird",
+      "breed": "Caique",
+      "category": "Avian",
+      "size": "Medium",
+      "commonNames": ["White-bellied Caique"]
+    },
+    {
+      "id": 179,
+      "species": "Bird",
+      "breed": "Eclectus Parrot",
+      "category": "Avian",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 180,
+      "species": "Bird",
+      "breed": "Meyer's Parrot",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 181,
+      "species": "Bird",
+      "breed": "Gouldian Finch",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 182,
+      "species": "Bird",
+      "breed": "Diamond Dove",
+      "category": "Avian",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 183,
+      "species": "Dog",
+      "breed": "Mixed Breed",
+      "category": "Canine",
+      "size": "Varies",
+      "commonNames": ["Mutt", "Rescue Dog"]
+    },
+    {
+      "id": 184,
+      "species": "Dog",
+      "breed": "Cockapoo",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 185,
+      "species": "Dog",
+      "breed": "Cavapoo",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 186,
+      "species": "Dog",
+      "breed": "Bernedoodle",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 187,
+      "species": "Dog",
+      "breed": "Aussiedoodle",
+      "category": "Canine",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 188,
+      "species": "Dog",
+      "breed": "Sheepadoodle",
+      "category": "Canine",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 189,
+      "species": "Dog",
+      "breed": "Morkie",
+      "category": "Canine",
+      "size": "Toy",
+      "commonNames": ["Maltese Yorkie Mix"]
+    },
+    {
+      "id": 190,
+      "species": "Dog",
+      "breed": "Puggle",
+      "category": "Canine",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 191,
+      "species": "Cat",
+      "breed": "Domestic Mediumhair",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["DMH"]
+    },
+    {
+      "id": 192,
+      "species": "Cat",
+      "breed": "Tabby",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["Tabby Cat"]
+    },
+    {
+      "id": 193,
+      "species": "Cat",
+      "breed": "Tuxedo",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["Tuxedo Cat"]
+    },
+    {
+      "id": 194,
+      "species": "Cat",
+      "breed": "Calico",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": []
+    },
+    {
+      "id": 195,
+      "species": "Cat",
+      "breed": "Tortoiseshell",
+      "category": "Feline",
+      "size": "Medium",
+      "commonNames": ["Tortie"]
+    },
+    {
+      "id": 196,
+      "species": "Rabbit",
+      "breed": "Mixed Breed",
+      "category": "Lagomorph",
+      "size": "Varies",
+      "commonNames": ["Rescue Rabbit"]
+    },
+    {
+      "id": 197,
+      "species": "Rabbit",
+      "breed": "New Zealand",
+      "category": "Lagomorph",
+      "size": "Large",
+      "commonNames": []
+    },
+    {
+      "id": 198,
+      "species": "Rabbit",
+      "breed": "Dutch",
+      "category": "Lagomorph",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 199,
+      "species": "Reptile",
+      "breed": "African Fat-tailed Gecko",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": []
+    },
+    {
+      "id": 200,
+      "species": "Reptile",
+      "breed": "Garter Snake",
+      "category": "Reptile",
+      "size": "Small",
+      "commonNames": []
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "total_entries": 200,
+    "categories": {
+      "canine": "Dogs",
+      "feline": "Cats",
+      "lagomorph": "Rabbits",
+      "rodent": "Rodents (Guinea Pigs, Hamsters, Rats, Mice, Gerbils, Chinchillas)",
+      "mustelid": "Ferrets",
+      "erinaceidae": "Hedgehogs",
+      "avian": "Birds",
+      "aquatic": "Fish",
+      "reptile": "Reptiles (Snakes, Lizards, Turtles, Tortoises)",
+      "amphibian": "Amphibians (Frogs, Salamanders)",
+      "crustacean": "Hermit Crabs",
+      "arachnid": "Tarantulas"
+    },
+    "usage_notes": [
+      "Each entry includes species, breed, category, size, and common alternative names",
+      "The commonNames array includes nicknames and alternative breed names that people might use",
+      "Size categories: Toy, Small, Medium, Large, Giant, Varies",
+      "This data is optimized for voice AI systems to understand pet queries",
+      "For RAG systems: Use species + breed as primary search keys, commonNames as secondary",
+      "Categories help with taxonomic grouping for broader queries"
+    ]
+  }
+}

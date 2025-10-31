@@ -60,10 +60,24 @@ function createUltravoxCall(callConfig) {
       });
 
       res.on('end', () => {
+        // Check HTTP status code
+        if (res.statusCode !== 200 && res.statusCode !== 201) {
+          logger.error({
+            statusCode: res.statusCode,
+            response: responseData.substring(0, 500)
+          }, 'Ultravox API error');
+          reject(new Error(`Ultravox API returned ${res.statusCode}: ${responseData.substring(0, 200)}`));
+          return;
+        }
+
         try {
           const parsedData = JSON.parse(responseData);
           resolve(parsedData);
         } catch (err) {
+          logger.error({
+            parseError: err.message,
+            responseStart: responseData.substring(0, 200)
+          }, 'Failed to parse Ultravox response');
           reject(err);
         }
       });
@@ -203,7 +217,11 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   ];
 
   // Create Ultravox call via REST API
-  logger.info({callSid}, 'Creating Ultravox call');
+  logger.info({
+    callSid,
+    promptLength: systemPrompt.length,
+    toolsCount: selectedTools.length
+  }, 'Creating Ultravox call');
 
   const callConfig = {
     systemPrompt,
