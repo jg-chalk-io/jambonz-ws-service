@@ -35,9 +35,9 @@ const server = http.createServer();
 /**
  * Generate TwiML for incoming call with Ultravox connection
  */
-function generateIncomingCallTwiML(from, to, callSid) {
-  // Load agent definition with caller number interpolation
-  const systemPrompt = loadAgentDefinition(from);
+async function generateIncomingCallTwiML(from, to, callSid) {
+  // Load agent definition - pass clinic number (to) and caller number (from)
+  const systemPrompt = await loadAgentDefinition(to, from);
 
   // Escape XML special characters in system prompt
   const escapedPrompt = systemPrompt
@@ -191,7 +191,7 @@ server.on('request', (req, res) => {
     body += chunk.toString();
   });
 
-  req.on('end', () => {
+  req.on('end', async () => {
     try {
       // Parse URL-encoded body (Twilio sends form data)
       const params = new URLSearchParams(body);
@@ -204,7 +204,7 @@ server.on('request', (req, res) => {
         const {From, To, CallSid} = data;
         logger.info({From, To, CallSid}, 'Twilio incoming call');
 
-        const twiml = generateIncomingCallTwiML(From, To, CallSid);
+        const twiml = await generateIncomingCallTwiML(From, To, CallSid);
 
         res.writeHead(200, {'Content-Type': 'text/xml'});
         res.end(twiml);
