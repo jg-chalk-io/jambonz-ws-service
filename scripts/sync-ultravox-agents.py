@@ -87,15 +87,20 @@ def update_ultravox_agent(agent_id, system_prompt, voice=None, tools=None):
         'Content-Type': 'application/json'
     }
 
-    payload = {
+    # CRITICAL: All fields must be wrapped in callTemplate object
+    call_template = {
         'systemPrompt': system_prompt
     }
 
     if voice:
-        payload['voice'] = voice
+        call_template['voice'] = voice
 
     if tools is not None:
-        payload['selectedTools'] = tools
+        call_template['selectedTools'] = tools
+
+    payload = {
+        'callTemplate': call_template
+    }
 
     response = requests.patch(url, headers=headers, json=payload)
 
