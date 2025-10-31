@@ -107,13 +107,16 @@ function getAgentPromptVariables(agentId) {
 
 /**
  * Filter template context to only include variables referenced in the prompt
+ * Converts all values to strings to match Ultravox's string-only schema
  */
 function filterTemplateContext(fullContext, referencedVariables) {
   const filtered = {};
 
   for (const varName of referencedVariables) {
     if (varName in fullContext) {
-      filtered[varName] = fullContext[varName];
+      const value = fullContext[varName];
+      // Convert all values to strings for Ultravox compatibility
+      filtered[varName] = String(value);
     } else {
       logger.warn({varName}, 'Variable referenced in prompt but not available in context');
     }
