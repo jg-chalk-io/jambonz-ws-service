@@ -180,17 +180,90 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     throw new Error(`No ultravox_agent_id configured for client ${clientData.name}`);
   }
 
-  // Get last 4 digits of caller number
-  const callerLast4 = from ? from.slice(-4) : '****';
+  // Get current date/time in clinic timezone
+  const timezone = clientData.business_hours_config?.timezone || 'America/Toronto';
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true
+  });
+  const currentDateTime = formatter.format(now);
 
-  // Build template context with variable values
+  // Extract date and time components
+  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const timeFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true
+  });
+  const currentDate = dateFormatter.format(now);
+  const currentTime = timeFormatter.format(now);
+  const dayOfWeek = new Intl.DateTimeFormat('en-US', {timeZone: timezone, weekday: 'long'}).format(now);
+
+  const hour = parseInt(new Intl.DateTimeFormat('en-US', {timeZone: timezone, hour: 'numeric', hour12: false}).format(now));
+  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+
+  // Format phone numbers
+  const callerLast4 = from ? from.slice(-4) : '****';
+  const callerFormatted = from ? `(${from.slice(2, 5)}) ${from.slice(5, 8)}-${from.slice(8)}` : 'Unknown';
+  const toFormatted = to ? `(${to.slice(2, 5)}) ${to.slice(5, 8)}-${to.slice(8)}` : '';
+
+  // Business hours check (TODO: Implement proper business hours logic)
+  const isOpen = false;  // Placeholder
+  const isClosed = true;  // Placeholder
+
+  // Build comprehensive template context with ALL available variables
   const templateContext = {
-    office_name: clientData.office_name || clientData.name,
-    agent_name: 'Jessica',
-    office_hours: clientData.office_hours || 'Please check our website',
+    // === TWILIO CALL PARAMETERS ===
+    call_sid: callSid,
+    caller_phone_number: from || '',
     caller_phone_last4: callerLast4,
-    clinic_open: false,  // TODO: Add business hours check
-    clinic_closed: true  // TODO: Add business hours check
+    caller_phone_formatted: callerFormatted,
+    to_phone_number: to || '',
+    to_phone_formatted: toFormatted,
+
+    // === CLIENT DATABASE FIELDS ===
+    client_id: clientData.id,
+    client_name: clientData.name,
+    office_name: clientData.office_name || clientData.name,
+    office_phone: clientData.office_phone || '',
+    office_website: clientData.office_website || '',
+    office_hours: clientData.office_hours || 'Please check our website',
+    primary_transfer_number: clientData.primary_transfer_number || '',
+    secondary_transfer_number: clientData.secondary_transfer_number || '',
+    vetwise_phone: clientData.vetwise_phone || '',
+    voicemail_enabled: clientData.voicemail_enabled || false,
+    business_hours_enabled: clientData.business_hours_enabled || false,
+
+    // === COMPUTED DATE/TIME VALUES ===
+    current_date: currentDate,
+    current_time: currentTime,
+    current_datetime: currentDateTime,
+    day_of_week: dayOfWeek,
+    time_of_day: timeOfDay,
+
+    // === BUSINESS HOURS STATUS ===
+    clinic_open: isOpen,
+    clinic_closed: isClosed,
+    is_the_clinic_open: isOpen ? 'yes' : 'no',
+
+    // === AGENT CONFIGURATION ===
+    agent_name: clientData.agent_voice || 'Jessica',
+    agent_temperature: clientData.agent_temperature || 0.4,
+    debug_mode: process.env.NODE_ENV === 'development'
   };
 
   logger.info({
