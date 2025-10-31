@@ -35,28 +35,17 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
 def get_standard_tools():
-    """Get standard tools that all agents should have"""
+    """
+    Get standard tools that all agents should have.
+    Uses durable tools registered in Ultravox by their toolId.
+
+    Tool IDs:
+    - transferFromAiTriageWithMetadata: 9d718770-d609-4223-bfe0-a5a8f30d582b
+      Transfers caller to live agent with caller metadata (name, callback, pet info, urgency)
+    """
     return [
         {
-            "temporaryTool": {
-                "modelToolName": "transferToOnCall",
-                "description": "Transfer the call to the on-call emergency team when the caller has an emergency or urgent situation that requires immediate veterinary attention. Use this when the situation cannot wait.",
-                "dynamicParameters": [
-                    {
-                        "name": "conversation_summary",
-                        "location": "PARAMETER_LOCATION_BODY",
-                        "schema": {
-                            "description": "Brief summary of the conversation and reason for transfer",
-                            "type": "string"
-                        },
-                        "required": True
-                    }
-                ],
-                "http": {
-                    "baseUrlPattern": f"{BASE_URL}/twilio/transferToOnCall",
-                    "httpMethod": "POST"
-                }
-            }
+            "toolId": "9d718770-d609-4223-bfe0-a5a8f30d582b"  # transferFromAiTriageWithMetadata
         }
     ]
 
