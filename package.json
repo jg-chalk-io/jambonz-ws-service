@@ -4,7 +4,7 @@
   "description": "Jambonz WebSocket service for LLM call handling with proper session context",
   "main": "simple-transfer.js",
   "scripts": {
-    "start": "node simple-transfer.js",
+    "start": "node twilio-handler.js",
     "start:jambonz": "node simple-transfer.js",
     "start:twilio": "node twilio-handler.js",
     "dev": "nodemon simple-transfer.js",
