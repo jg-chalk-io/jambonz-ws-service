@@ -249,10 +249,24 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   const hour = parseInt(new Intl.DateTimeFormat('en-US', {timeZone: timezone, hour: 'numeric', hour12: false}).format(now));
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
 
-  // Format phone numbers
-  const callerLast4 = from ? from.slice(-4) : '****';
-  const callerFormatted = from ? `(${from.slice(2, 5)}) ${from.slice(5, 8)}-${from.slice(8)}` : 'Unknown';
-  const toFormatted = to ? `(${to.slice(2, 5)}) ${to.slice(5, 8)}-${to.slice(8)}` : '';
+  // Helper function to strip +1 prefix from phone numbers
+  const stripInternationalPrefix = (phone) => {
+    if (!phone) return '';
+    return phone.replace(/^\+1/, '');
+  };
+
+  // Strip +1 from phone numbers - provide 10-digit format only
+  const callerPhone10Digit = stripInternationalPrefix(from);
+  const toPhone10Digit = stripInternationalPrefix(to);
+  const officePhone10Digit = stripInternationalPrefix(clientData.office_phone);
+  const primaryTransfer10Digit = stripInternationalPrefix(clientData.primary_transfer_number);
+  const secondaryTransfer10Digit = stripInternationalPrefix(clientData.secondary_transfer_number);
+  const vetwisePhone10Digit = stripInternationalPrefix(clientData.vetwise_phone);
+
+  // Format phone numbers for display (using 10-digit format)
+  const callerLast4 = callerPhone10Digit ? callerPhone10Digit.slice(-4) : '****';
+  const callerFormatted = callerPhone10Digit ? `(${callerPhone10Digit.slice(0, 3)}) ${callerPhone10Digit.slice(3, 6)}-${callerPhone10Digit.slice(6)}` : 'Unknown';
+  const toFormatted = toPhone10Digit ? `(${toPhone10Digit.slice(0, 3)}) ${toPhone10Digit.slice(3, 6)}-${toPhone10Digit.slice(6)}` : '';
 
   // Business hours check (TODO: Implement proper business hours logic)
   const isOpen = false;  // Placeholder
@@ -262,22 +276,22 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   const fullTemplateContext = {
     // === TWILIO CALL PARAMETERS ===
     call_sid: callSid,
-    caller_phone_number: from || '',
+    caller_phone_number: callerPhone10Digit,
     caller_phone_last4: callerLast4,
     caller_phone_formatted: callerFormatted,
-    to_phone_number: to || '',
+    to_phone_number: toPhone10Digit,
     to_phone_formatted: toFormatted,
 
     // === CLIENT DATABASE FIELDS ===
     client_id: clientData.id,
     client_name: clientData.name,
     office_name: clientData.office_name || clientData.name,
-    office_phone: clientData.office_phone || '',
+    office_phone: officePhone10Digit,
     office_website: clientData.office_website || '',
     office_hours: clientData.office_hours || 'Please check our website',
-    primary_transfer_number: clientData.primary_transfer_number || '',
-    secondary_transfer_number: clientData.secondary_transfer_number || '',
-    vetwise_phone: clientData.vetwise_phone || '',
+    primary_transfer_number: primaryTransfer10Digit,
+    secondary_transfer_number: secondaryTransfer10Digit,
+    vetwise_phone: vetwisePhone10Digit,
     voicemail_enabled: clientData.voicemail_enabled || false,
     business_hours_enabled: clientData.business_hours_enabled || false,
 
