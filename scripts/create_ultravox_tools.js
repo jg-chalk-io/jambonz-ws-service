@@ -94,6 +94,30 @@ const tools = [
 async function createTool(tool) {
   console.log(`Creating durable tool: ${tool.name}`);
 
+  const definition = {
+    modelToolName: tool.name,
+    description: tool.description,
+    dynamicParameters: Object.entries(tool.parameters.properties).map(([name, schema]) => ({
+      name,
+      location: 'PARAMETER_LOCATION_BODY',
+      schema: {
+        type: schema.type,
+        description: schema.description
+      },
+      required: tool.parameters.required?.includes(name) || false
+    })),
+    http: tool.http
+  };
+
+  // Add staticParameters if they exist
+  if (tool.staticParameters) {
+    definition.staticParameters = Object.entries(tool.staticParameters).map(([name, config]) => ({
+      name,
+      location: 'PARAMETER_LOCATION_BODY',
+      value: config.value
+    }));
+  }
+
   const response = await fetch('https://api.ultravox.ai/api/tools', {
     method: 'POST',
     headers: {
@@ -102,20 +126,7 @@ async function createTool(tool) {
     },
     body: JSON.stringify({
       name: tool.name,
-      definition: {
-        modelToolName: tool.name,
-        description: tool.description,
-        dynamicParameters: Object.entries(tool.parameters.properties).map(([name, schema]) => ({
-          name,
-          location: 'PARAMETER_LOCATION_BODY',
-          schema: {
-            type: schema.type,
-            description: schema.description
-          },
-          required: tool.parameters.required?.includes(name) || false
-        })),
-        http: tool.http
-      }
+      definition
     })
   });
 

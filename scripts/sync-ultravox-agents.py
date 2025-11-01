@@ -33,21 +33,91 @@ if not all([SUPABASE_URL, SUPABASE_SERVICE_KEY, ULTRAVOX_API_KEY]):
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
+# Durable tool IDs from Ultravox
+# Map of tool names (as referenced in prompts) to their tool IDs
+ULTRAVOX_TOOLS = {
+    'transferFromAiTriageWithMetadata': '9d718770-d609-4223-bfe0-a5a8f30d582b',
+    'coldTransfer': '2fff509d-273f-414e-91ff-aa933435a545',
+    'collectNameNumberConcernPetName': '4e0b0313-df50-4c18-aba1-bbf4acbfff88',
+    'leaveVoicemail': '8721c74d-af3f-4dfa-a736-3bc170ef917c',
+    'queryCorpus': '84a31bac-5c1b-41c3-9058-f81acb7ffaa7',
+    'playDtmfSounds': '3e9489b1-25de-4032-bb3d-f7b84765ec93',
+    'hangUp': '56294126-5a7d-4948-b67d-3b7e13d55ea7'
+}
 
-def get_standard_tools():
-    """
-    Get standard tools that all agents should have.
-    Uses durable tools registered in Ultravox by their toolId.
+# Core tools that should ALWAYS be included (regardless of prompt content)
+# These are essential tools that every agent should have access to
+CORE_TOOLS = [
+    'transferFromAiTriageWithMetadata',  # Transfer to human agent
+    'hangUp'  # End call gracefully
+]
 
-    Tool IDs:
-    - transferFromAiTriageWithMetadata: 9d718770-d609-4223-bfe0-a5a8f30d582b
-      Transfers caller to live agent with caller metadata (name, callback, pet info, urgency)
+# Commonly referenced tools that should be auto-enabled if in prompt
+# (These are detected automatically, no need to add to CORE_TOOLS unless they should ALWAYS be enabled)
+
+
+def detect_tools_from_prompt(system_prompt):
     """
-    return [
-        {
-            "toolId": "9d718770-d609-4223-bfe0-a5a8f30d582b"  # transferFromAiTriageWithMetadata
-        }
-    ]
+    Scan the system prompt to detect which tools are referenced.
+    Returns a set of tool names that should be enabled.
+    """
+    detected_tools = set()
+
+    for tool_name in ULTRAVOX_TOOLS.keys():
+        if tool_name in system_prompt:
+            detected_tools.add(tool_name)
+
+    return detected_tools
+
+
+def get_tools_for_client(client_data):
+    """
+    Get tools that should be configured for this client.
+    Automatically detects tools from system prompt and adds corpus tool if configured.
+
+    Returns list of tool configurations for Ultravox API.
+    """
+    system_prompt = client_data.get('system_prompt', '')
+
+    # Start with core tools (always included)
+    enabled_tools = set(CORE_TOOLS)
+
+    # Auto-detect tools from system prompt
+    detected_tools = detect_tools_from_prompt(system_prompt)
+    enabled_tools.update(detected_tools)
+
+    # Build tool configurations
+    tools = []
+
+    for tool_name in enabled_tools:
+        if tool_name not in ULTRAVOX_TOOLS:
+            print(f"  ⚠️  Unknown tool referenced: {tool_name}")
+            continue
+
+        tool_id = ULTRAVOX_TOOLS[tool_name]
+
+        # Special handling for queryCorpus - needs corpus_id parameter
+        if tool_name == 'queryCorpus':
+            corpus_id = client_data.get('corpus_id')
+            if not corpus_id:
+                print(f"  ⚠️  queryCorpus referenced in prompt but no corpus_id configured")
+                continue
+
+            print(f"  📚 Adding queryCorpus tool with corpus_id: {corpus_id}")
+            tools.append({
+                "toolId": tool_id,
+                "parameterOverrides": {
+                    "corpus_id": corpus_id,
+                    "max_results": int(client_data.get('corpus_max_results', 5))
+                }
+            })
+        else:
+            # Standard tool - no parameters needed
+            if tool_name in detected_tools and tool_name not in CORE_TOOLS:
+                print(f"  🔧 Auto-detected tool from prompt: {tool_name}")
+            tools.append({"toolId": tool_id})
+
+    return tools
 
 
 def get_ultravox_agent(agent_id):
@@ -131,8 +201,8 @@ def sync_agent(client_data, dry_run=False):
         current_voice = current_agent.get('voice', '')
         current_tools = current_agent.get('callTemplate', {}).get('selectedTools', [])
 
-        # Get standard tools
-        standard_tools = get_standard_tools()
+        # Get tools for this client (auto-detected from prompt + corpus if configured)
+        standard_tools = get_tools_for_client(client_data)
 
         # Check if update needed
         prompt_changed = current_prompt != system_prompt

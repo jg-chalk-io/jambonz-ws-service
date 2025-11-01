@@ -325,6 +325,20 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   const ultravoxResponse = await createUltravoxCallWithAgent(clientData.ultravox_agent_id, callConfig);
   logger.info({callSid, ultravoxResponse}, 'Got Ultravox joinUrl');
 
+  // Store mapping of ultravox_call_id to twilio_call_sid for tool invocations
+  try {
+    await supabase.from('twilio_ultravox_calls').insert({
+      twilio_call_sid: callSid,
+      ultravox_call_id: ultravoxResponse.callId,
+      from_number: from,
+      to_number: to
+    });
+    logger.info({callSid, ultravoxCallId: ultravoxResponse.callId}, 'Stored call mapping');
+  } catch (mappingError) {
+    logger.error({callSid, ultravoxCallId: ultravoxResponse.callId, error: mappingError}, 'Failed to store call mapping');
+    // Don't fail the call if mapping storage fails - log and continue
+  }
+
   // Generate TwiML with joinUrl from Ultravox
   const twimlResponse = new twilio.twiml.VoiceResponse();
   const connect = twimlResponse.connect();
@@ -339,22 +353,42 @@ async function generateIncomingCallTwiML(from, to, callSid) {
 /**
  * Handle transfer for Twilio calls using REST API
  */
-async function handleTwilioTransfer(toolData, res) {
+async function handleTwilioTransfer(toolData, req, res) {
   try {
-    const {call_sid, to_phone_number, conversation_summary} = toolData;
+    // Extract Ultravox call ID from request header
+    const ultravoxCallId = req.headers['x-ultravox-call-token'];
+
+    if (!ultravoxCallId) {
+      throw new Error('Missing X-Ultravox-Call-Token header');
+    }
+
+    // Look up Twilio call_sid from database
+    const {supabase} = require('./lib/supabase');
+    const {data: mapping, error: mappingError} = await supabase
+      .from('twilio_ultravox_calls')
+      .select('twilio_call_sid')
+      .eq('ultravox_call_id', ultravoxCallId)
+      .single();
+
+    if (mappingError || !mapping) {
+      throw new Error(`Could not find twilio_call_sid for ultravox_call_id: ${ultravoxCallId}`);
+    }
+
+    const call_sid = mapping.twilio_call_sid;
+    const {to_phone_number, conversation_summary} = toolData;
 
     logger.info({
+      ultravoxCallId,
       call_sid,
       to_phone_number,
       conversation_summary
     }, 'Handling Twilio transfer via REST API');
 
     if (!call_sid) {
-      throw new Error('Missing call_sid in tool data');
+      throw new Error('Missing call_sid in mapping');
     }
 
     // Load client from database using the clinic number (to_phone_number)
-    const {supabase} = require('./lib/supabase');
     const {data: clientData, error: clientError} = await supabase
       .from('clients')
       .select('*')
@@ -437,7 +471,7 @@ server.on('request', (req, res) => {
       } else if (req.url === '/twilio/transferToOnCall' && req.method === 'POST') {
         // Handle Twilio transfer via REST API
         const toolData = body ? JSON.parse(body) : {};
-        await handleTwilioTransfer(toolData, res);
+        await handleTwilioTransfer(toolData, req, res);
 
       } else if (req.url === '/twilio/collectCallerInfo' && req.method === 'POST') {
         const toolData = body ? JSON.parse(body) : {};
