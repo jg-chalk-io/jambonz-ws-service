@@ -355,10 +355,17 @@ async function generateIncomingCallTwiML(from, to, callSid) {
  */
 async function handleTwilioTransfer(toolData, req, res) {
   try {
-    // Extract Ultravox call ID from request header
-    const ultravoxCallId = req.headers['x-ultravox-call-token'];
+    // DEBUG: Log all headers to see what Ultravox sends
+    logger.info({headers: req.headers, toolData}, 'Received transfer request - debugging headers');
+
+    // Extract Ultravox call ID from request header (try multiple possible names)
+    const ultravoxCallId = req.headers['x-ultravox-call-token'] ||
+                          req.headers['x-ultravox-call-id'] ||
+                          req.headers['x-call-id'] ||
+                          req.headers['ultravox-call-id'];
 
     if (!ultravoxCallId) {
+      logger.error({headers: req.headers}, 'Could not find Ultravox call ID in headers');
       throw new Error('Missing X-Ultravox-Call-Token header');
     }
 
