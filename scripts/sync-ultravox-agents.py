@@ -36,7 +36,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 # Durable tool IDs from Ultravox
 # Map of tool names (as referenced in prompts) to their tool IDs
 ULTRAVOX_TOOLS = {
-    'transferFromAiTriageWithMetadata': '9d718770-d609-4223-bfe0-a5a8f30d582b',
+    'transferFromAiTriageWithMetadata': 'c5835b78-7e5f-4515-a9fa-1d91c61fceea',
     'coldTransfer': '2fff509d-273f-414e-91ff-aa933435a545',
     'collectNameNumberConcernPetName': '4e0b0313-df50-4c18-aba1-bbf4acbfff88',
     'leaveVoicemail': '8721c74d-af3f-4dfa-a736-3bc170ef917c',
