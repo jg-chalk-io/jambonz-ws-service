@@ -255,6 +255,36 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     return phone.replace(/^\+1/, '');
   };
 
+  // Helper function to format phone number digit-by-digit with ellipses for natural pacing
+  // Example: "4168189171" → "four... one... six... ... eight... one... eight... ... nine... one... seven... one"
+  const formatPhoneDigitByDigit = (phone) => {
+    if (!phone || phone.length !== 10) return '';
+
+    const digitWords = {
+      '0': 'zero', '1': 'one', '2': 'two', '3': 'three', '4': 'four',
+      '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine'
+    };
+
+    const digits = phone.split('');
+    let result = '';
+
+    for (let i = 0; i < digits.length; i++) {
+      result += digitWords[digits[i]];
+
+      // Add "... " after each digit except the last
+      if (i < digits.length - 1) {
+        result += '... ';
+      }
+
+      // Add extra "... " after 3rd digit (area code) and 6th digit (first part of local)
+      if (i === 2 || i === 5) {
+        result += '... ';
+      }
+    }
+
+    return result;
+  };
+
   // Strip +1 from phone numbers - provide 10-digit format only
   const callerPhone10Digit = stripInternationalPrefix(from);
   const toPhone10Digit = stripInternationalPrefix(to);
@@ -268,6 +298,9 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   const callerFormatted = callerPhone10Digit ? `(${callerPhone10Digit.slice(0, 3)}) ${callerPhone10Digit.slice(3, 6)}-${callerPhone10Digit.slice(6)}` : 'Unknown';
   const toFormatted = toPhone10Digit ? `(${toPhone10Digit.slice(0, 3)}) ${toPhone10Digit.slice(3, 6)}-${toPhone10Digit.slice(6)}` : '';
 
+  // Format phone number digit-by-digit for AI to speak naturally
+  const callerPhoneDigits = formatPhoneDigitByDigit(callerPhone10Digit);
+
   // Business hours check (TODO: Implement proper business hours logic)
   const isOpen = false;  // Placeholder
   const isClosed = true;  // Placeholder
@@ -279,6 +312,7 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     caller_phone_number: callerPhone10Digit,
     caller_phone_last4: callerLast4,
     caller_phone_formatted: callerFormatted,
+    caller_phone_digits: callerPhoneDigits,
     to_phone_number: toPhone10Digit,
     to_phone_formatted: toFormatted,
 
