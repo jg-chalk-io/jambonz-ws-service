@@ -354,6 +354,9 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   // Create Ultravox call via REST API using Agent Template
   const callConfig = {
     templateContext,
+    requestContext: {
+      call_sid: callSid  // Pass call_sid in requestContext for tool static parameters
+    },
     medium: {
       twilio: {}
     }
@@ -392,45 +395,21 @@ async function generateIncomingCallTwiML(from, to, callSid) {
  */
 async function handleTwilioTransfer(toolData, req, res) {
   try {
-    // DEBUG: Log all headers to see what Ultravox sends
-    logger.info({headers: req.headers, toolData}, 'Received transfer request - debugging headers');
+    // Extract call_sid from tool data (passed via static parameter with template variable)
+    const call_sid = toolData.call_sid;
 
-    // Extract Ultravox call ID from request header (try multiple possible names)
-    const ultravoxCallId = req.headers['x-ultravox-call-token'] ||
-                          req.headers['x-ultravox-call-id'] ||
-                          req.headers['x-call-id'] ||
-                          req.headers['ultravox-call-id'];
-
-    if (!ultravoxCallId) {
-      logger.error({headers: req.headers}, 'Could not find Ultravox call ID in headers');
-      throw new Error('Missing X-Ultravox-Call-Token header');
+    if (!call_sid) {
+      logger.error({toolData}, 'Missing call_sid in tool data');
+      throw new Error('Missing call_sid in tool data');
     }
 
-    // Look up Twilio call_sid from database
-    const {supabase} = require('./lib/supabase');
-    const {data: mapping, error: mappingError} = await supabase
-      .from('twilio_ultravox_calls')
-      .select('twilio_call_sid')
-      .eq('ultravox_call_id', ultravoxCallId)
-      .single();
-
-    if (mappingError || !mapping) {
-      throw new Error(`Could not find twilio_call_sid for ultravox_call_id: ${ultravoxCallId}`);
-    }
-
-    const call_sid = mapping.twilio_call_sid;
     const {to_phone_number, conversation_summary} = toolData;
 
     logger.info({
-      ultravoxCallId,
       call_sid,
       to_phone_number,
       conversation_summary
     }, 'Handling Twilio transfer via REST API');
-
-    if (!call_sid) {
-      throw new Error('Missing call_sid in mapping');
-    }
 
     // Load client from database using the clinic number (to_phone_number)
     const {data: clientData, error: clientError} = await supabase
