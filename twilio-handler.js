@@ -255,8 +255,8 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     return phone.replace(/^\+1/, '');
   };
 
-  // Helper function to format phone number digit-by-digit with ellipses for natural pacing
-  // Example: "4168189171" → "four... one... six... ... eight... one... eight... ... nine... one... seven... one"
+  // Helper function to format phone number digit-by-digit in groups with pauses
+  // Example: "4168189171" → "four one six... pause... eight one eight... pause... nine one seven one"
   const formatPhoneDigitByDigit = (phone) => {
     if (!phone || phone.length !== 10) return '';
 
@@ -265,24 +265,13 @@ async function generateIncomingCallTwiML(from, to, callSid) {
       '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine'
     };
 
-    const digits = phone.split('');
-    let result = '';
+    // Split into groups: area code (3), prefix (3), line number (4)
+    const areaCode = phone.substring(0, 3).split('').map(d => digitWords[d]).join(' ');
+    const prefix = phone.substring(3, 6).split('').map(d => digitWords[d]).join(' ');
+    const lineNumber = phone.substring(6, 10).split('').map(d => digitWords[d]).join(' ');
 
-    for (let i = 0; i < digits.length; i++) {
-      result += digitWords[digits[i]];
-
-      // Add "... " after each digit except the last
-      if (i < digits.length - 1) {
-        result += '... ';
-      }
-
-      // Add extra "... " after 3rd digit (area code) and 6th digit (first part of local)
-      if (i === 2 || i === 5) {
-        result += '... ';
-      }
-    }
-
-    return result;
+    // Format with pauses between groups
+    return `${areaCode}... pause... ${prefix}... pause... ${lineNumber}`;
   };
 
   // Strip +1 from phone numbers - provide 10-digit format only
