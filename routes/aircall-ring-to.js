@@ -43,7 +43,9 @@ async function handleAircallRingTo(req, res, bodyData = null) {
     logger.info({
       call_id,
       caller_number,
-      target_number
+      target_number,
+      fullBody: body,
+      bodyKeys: Object.keys(body)
     }, 'Ring-to API request received');
 
     // Verify authentication
@@ -67,9 +69,16 @@ async function handleAircallRingTo(req, res, bodyData = null) {
     }
 
     // Validate required parameters
-    if (!call_id || !caller_number) {
-      logger.error({call_id, caller_number}, 'Missing required parameters');
-      return sendResponse(res, 400, {error: 'Missing call_id or caller_number'});
+    if (!caller_number) {
+      logger.error({call_id, caller_number}, 'Missing required parameter: caller_number');
+      return sendResponse(res, 400, {error: 'Missing caller_number'});
+    }
+
+    // If call_id is missing, we can't send insight card but still route the call
+    if (!call_id) {
+      logger.warn({caller_number}, 'Missing call_id - will route without insight card');
+      const routingTarget = getRoutingTarget({});
+      return sendResponse(res, 200, routingTarget);
     }
 
     // Process asynchronously with timeout protection
