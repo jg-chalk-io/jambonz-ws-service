@@ -1,4 +1,9 @@
 const http = require('http');
+const {supabase} = require('../lib/supabase');
+const {ToolCallLogger} = require('../lib/tool-call-logger');
+const pino = require('pino');
+
+const baseLogger = pino({level: process.env.LOG_LEVEL || 'info'});
 
 /**
  * Create HTTP tool handlers with platform-specific transfer logic
@@ -54,27 +59,109 @@ function createToolHandlers(config) {
   /**
    * Handle collectCallerInfo HTTP tool invocation
    */
-  function handleCollectCallerInfo(data, res) {
-    const {call_sid, first_name, last_name, pet_name, species, callback_number, concern_description} = data;
-    const caller_name = last_name ? `${first_name} ${last_name}` : first_name;
+  async function handleCollectCallerInfo(data, res) {
+    let logId = null;
 
-    logger.info({
-      call_sid,
-      caller_name,
-      pet_name,
-      species,
-      callback_number,
-      concern_description
-    }, 'Caller information collected');
+    try {
+      const {call_sid, first_name, last_name, pet_name, species, callback_number, concern_description} = data;
+      const caller_name = last_name ? `${first_name} ${last_name}` : first_name;
 
-    // TODO: Store in database (Supabase call_logs or messages table)
+      logger.info({
+        call_sid,
+        caller_name,
+        pet_name,
+        species,
+        callback_number,
+        concern_description
+      }, 'Caller information collected');
 
-    // Send success response
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify({
-      success: true,
-      message: 'Information recorded successfully'
-    }));
+      // Determine urgency level from concern description
+      const concernLower = (concern_description || '').toLowerCase();
+      const urgencyLevel = concernLower.includes('urgent') || concernLower.includes('emergency')
+                          ? 'urgent'
+                          : 'normal';
+
+      // Log tool call to database IMMEDIATELY
+      logId = await ToolCallLogger.logToolCall({
+        toolName: 'collectNameNumberConcernPetName',
+        toolParameters: data,
+        ultravoxCallId: null, // Not available in this context
+        twilioCallSid: call_sid,
+        callbackNumber: callback_number,
+        callerName: caller_name,
+        urgencyLevel: urgencyLevel,
+        toolData: {
+          caller_name,
+          pet_name,
+          species,
+          concern_description,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Store callback request for processing by backend system
+      // This allows retry if frontend posting fails
+      const {error: insertError} = await supabase
+        .from('callback_requests')
+        .insert({
+          callback_number,
+          caller_name,
+          pet_name,
+          species,
+          concern_description,
+          urgency_level: urgencyLevel,
+          call_sid,
+          tool_call_log_id: logId,
+          status: 'pending' // Will be processed by backend worker
+        });
+
+      if (insertError) {
+        logger.error({insertError, logId}, 'Failed to store callback request');
+        // Mark tool call as failed
+        if (logId) {
+          await ToolCallLogger.logFailure(logId, 'Failed to store callback request', {
+            error: insertError.message
+          });
+        }
+        throw insertError;
+      }
+
+      // Mark tool call as successful
+      if (logId) {
+        await ToolCallLogger.logSuccess(logId, {
+          callback_request_stored: true,
+          callback_number,
+          caller_name
+        });
+      }
+
+      logger.info({logId, callback_number, caller_name}, 'Callback request stored successfully');
+
+      // Send success response
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        success: true,
+        message: 'Information recorded successfully'
+      }));
+
+    } catch (err) {
+      logger.error({err, data}, 'Error handling collect caller info');
+
+      // Mark tool call as failed if logId exists
+      if (logId) {
+        await ToolCallLogger.logFailure(logId, err.message, {
+          error: err.message,
+          stack: err.stack,
+          data
+        });
+      }
+
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        success: false,
+        error: err.message
+      }));
+    }
   }
 
   /**

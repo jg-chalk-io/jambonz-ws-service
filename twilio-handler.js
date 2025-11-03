@@ -6,6 +6,7 @@ const pino = require('pino');
 const {loadAgentDefinition} = require('./shared/agent-config');
 const {createToolHandlers, createTwilioTransfer} = require('./shared/tool-handlers');
 const {supabase} = require('./lib/supabase');
+const {ToolCallLogger} = require('./lib/tool-call-logger');
 
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3001;
@@ -363,15 +364,44 @@ async function generateIncomingCallTwiML(from, to, callSid) {
   const ultravoxResponse = await createUltravoxCallWithAgent(clientData.ultravox_agent_id, callConfig);
   logger.info({callSid, ultravoxResponse}, 'Got Ultravox joinUrl');
 
+  // Create call_logs entry
+  let callLogId = null;
+  try {
+    const {data: callLogData, error: callLogError} = await supabase
+      .from('call_logs')
+      .insert({
+        call_sid: callSid,
+        from_number: from,
+        to_number: to,
+        client_id: clientData.id,
+        direction: 'inbound',
+        status: 'in-progress',
+        ultravox_call_id: ultravoxResponse.callId,
+        start_time: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (callLogError) {
+      logger.error({callLogError, callSid}, 'Failed to create call_logs entry');
+    } else {
+      callLogId = callLogData.id;
+      logger.info({callSid, callLogId, ultravoxCallId: ultravoxResponse.callId}, 'Created call_logs entry');
+    }
+  } catch (callLogException) {
+    logger.error({callLogException, callSid}, 'Exception creating call_logs entry');
+  }
+
   // Store mapping of ultravox_call_id to twilio_call_sid for tool invocations
   try {
     await supabase.from('twilio_ultravox_calls').insert({
       twilio_call_sid: callSid,
       ultravox_call_id: ultravoxResponse.callId,
       from_number: from,
-      to_number: to
+      to_number: to,
+      call_log_id: callLogId  // Link to call_logs
     });
-    logger.info({callSid, ultravoxCallId: ultravoxResponse.callId}, 'Stored call mapping');
+    logger.info({callSid, ultravoxCallId: ultravoxResponse.callId, callLogId}, 'Stored call mapping');
   } catch (mappingError) {
     logger.error({callSid, ultravoxCallId: ultravoxResponse.callId, error: mappingError}, 'Failed to store call mapping');
     // Don't fail the call if mapping storage fails - log and continue
@@ -392,6 +422,8 @@ async function generateIncomingCallTwiML(from, to, callSid) {
  * Handle transfer for Twilio calls using REST API
  */
 async function handleTwilioTransfer(toolData, req, res) {
+  let logId = null;
+
   try {
     // Log all request details for debugging
     logger.info({
@@ -400,11 +432,47 @@ async function handleTwilioTransfer(toolData, req, res) {
       url: req.url
     }, 'Transfer request received');
 
-    // Try to get Ultravox call ID from multiple sources
-    let ultravoxCallId = req.headers['x-ultravox-call-id'] ||
-                         req.headers['x-call-id'] ||
-                         toolData.ultravox_call_id ||
-                         toolData.callId;
+    // Determine urgency level from tool data
+    const urgencyLevel = toolData.urgency_reason?.toLowerCase().includes('critical') ||
+                        toolData.urgency_reason?.toLowerCase().includes('emergency')
+                        ? 'critical'
+                        : 'urgent';
+
+    // Get ultravox_call_id for lookup
+    const ultravoxCallId = req.headers['x-ultravox-call-id'] || req.headers['x-call-id'];
+
+    // Look up call_log_id from mapping if possible
+    let callLogId = null;
+    if (ultravoxCallId) {
+      const {data: mapping} = await supabase
+        .from('twilio_ultravox_calls')
+        .select('call_log_id')
+        .eq('ultravox_call_id', ultravoxCallId)
+        .single();
+      callLogId = mapping?.call_log_id;
+    }
+
+    // Log tool call to database IMMEDIATELY for reliability
+    logId = await ToolCallLogger.logToolCall({
+      toolName: 'transferFromAiTriageWithMetadata',
+      toolParameters: toolData,
+      ultravoxCallId: ultravoxCallId,
+      twilioCallSid: null, // Will be determined below
+      callLogId: callLogId, // Link to call_logs
+      callbackNumber: toolData.callback_number,
+      callerName: toolData.caller_name,
+      urgencyLevel: urgencyLevel,
+      toolData: {
+        ...toolData,
+        requestHeaders: req.headers,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    // Try additional sources for Ultravox call ID
+    if (!ultravoxCallId) {
+      ultravoxCallId = toolData.ultravox_call_id || toolData.callId;
+    }
 
     // If call_sid is present but looks like an uninterpolated template variable, ignore it
     const call_sid_from_tool = toolData.call_sid;
@@ -455,8 +523,27 @@ async function handleTwilioTransfer(toolData, req, res) {
 
     await performTransfer(call_sid, to_phone_number, toolData, res);
 
+    // Mark tool call as successful
+    if (logId) {
+      await ToolCallLogger.logSuccess(logId, {
+        call_sid,
+        to_phone_number,
+        transfer_completed_at: new Date().toISOString()
+      });
+    }
+
   } catch (err) {
     logger.error({err, toolData}, 'Error handling Twilio transfer');
+
+    // Mark tool call as failed - THIS TRIGGERS CALLBACK RETRY
+    if (logId) {
+      await ToolCallLogger.logFailure(logId, err.message, {
+        error: err.message,
+        stack: err.stack,
+        toolData
+      });
+    }
+
     res.writeHead(500, {'Content-Type': 'application/json'});
     res.end(JSON.stringify({
       success: false,
