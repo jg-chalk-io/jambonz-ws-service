@@ -753,9 +753,30 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route,
   }
 
   // Update the active call using Twilio REST API
-  await twilioClient.calls(call_sid).update({
-    twiml: transferTwiml
-  });
+  // Retry logic to handle race condition where call was just created
+  let retryCount = 0;
+  const maxRetries = 3;
+  let lastError;
+
+  while (retryCount < maxRetries) {
+    try {
+      await twilioClient.calls(call_sid).update({
+        twiml: transferTwiml
+      });
+      break; // Success - exit retry loop
+    } catch (err) {
+      lastError = err;
+      if (err.status === 404 && retryCount < maxRetries - 1) {
+        // Call not found yet - wait and retry
+        retryCount++;
+        logger.warn({call_sid, retryCount}, 'Call not found yet, retrying after delay');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+      } else {
+        // Different error or max retries reached - throw it
+        throw err;
+      }
+    }
+  }
 
   logger.info({
     call_sid,
