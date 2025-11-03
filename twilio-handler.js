@@ -439,10 +439,11 @@ async function handleTwilioTransfer(toolData, req, res) {
                         : 'urgent';
 
     // Get ultravox_call_id from multiple sources (priority order)
-    let ultravoxCallId = toolData.ultravox_call_id ||  // NEW: From tool staticParameters
-                         req.headers['x-ultravox-call-id'] ||
-                         req.headers['x-call-id'] ||
-                         toolData.callId;
+    // Ultravox automatically sends X-Ultravox-Call-Id header with HTTP tool calls
+    let ultravoxCallId = req.headers['x-ultravox-call-id'] ||  // PRIMARY: Ultravox header (automatic)
+                         req.headers['x-call-id'] ||           // FALLBACK: Alternative header
+                         toolData.ultravox_call_id ||          // FALLBACK: Tool data (if present)
+                         toolData.callId;                      // FALLBACK: Legacy field
 
     // Look up call_log_id from mapping if possible
     let callLogId = null;
