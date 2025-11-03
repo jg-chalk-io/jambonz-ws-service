@@ -5,6 +5,7 @@ const twilio = require('twilio');
 const pino = require('pino');
 const {loadAgentDefinition} = require('./shared/agent-config');
 const {createToolHandlers, createTwilioTransfer} = require('./shared/tool-handlers');
+const {supabase} = require('./lib/supabase');
 
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3001;
@@ -392,66 +393,67 @@ async function generateIncomingCallTwiML(from, to, callSid) {
  */
 async function handleTwilioTransfer(toolData, req, res) {
   try {
-    // Extract call_sid from tool data (passed via static parameter with template variable)
-    const call_sid = toolData.call_sid;
+    // Log all request details for debugging
+    logger.info({
+      toolData,
+      headers: req.headers,
+      url: req.url
+    }, 'Transfer request received');
 
-    if (!call_sid) {
-      logger.error({toolData}, 'Missing call_sid in tool data');
-      throw new Error('Missing call_sid in tool data');
+    // Try to get Ultravox call ID from multiple sources
+    let ultravoxCallId = req.headers['x-ultravox-call-id'] ||
+                         req.headers['x-call-id'] ||
+                         toolData.ultravox_call_id ||
+                         toolData.callId;
+
+    // If call_sid is present but looks like an uninterpolated template variable, ignore it
+    const call_sid_from_tool = toolData.call_sid;
+    if (call_sid_from_tool && call_sid_from_tool.includes('{{')) {
+      logger.warn({call_sid_from_tool}, 'Ignoring uninterpolated template variable');
+    } else if (call_sid_from_tool && call_sid_from_tool.startsWith('CA')) {
+      // Valid Twilio call SID format - use it directly
+      logger.info({call_sid: call_sid_from_tool}, 'Using call_sid from tool data directly');
+
+      // Get client info from callback_number
+      const callback_number = toolData.callback_number;
+
+      // Look up to_phone_number from mapping if available
+      const {data: callMapping} = await supabase
+        .from('twilio_ultravox_calls')
+        .select('to_number')
+        .eq('twilio_call_sid', call_sid_from_tool)
+        .single();
+
+      const to_phone_number = callMapping?.to_number || callback_number;
+
+      await performTransfer(call_sid_from_tool, to_phone_number, toolData, res);
+      return;
     }
 
-    const {to_phone_number, conversation_summary} = toolData;
+    // Fallback: Look up via Ultravox call ID
+    if (!ultravoxCallId) {
+      logger.error({toolData, headers: req.headers}, 'Cannot determine Ultravox call ID');
+      throw new Error('Cannot determine Ultravox call ID - no header or field found');
+    }
 
-    logger.info({
-      call_sid,
-      to_phone_number,
-      conversation_summary
-    }, 'Handling Twilio transfer via REST API');
+    logger.info({ultravoxCallId}, 'Looking up Twilio call SID from Ultravox call ID');
 
-    // Load client from database using the clinic number (to_phone_number)
-    const {data: clientData, error: clientError} = await supabase
-      .from('clients')
-      .select('*')
-      .eq('vetwise_phone', to_phone_number)
+    // Look up Twilio call SID from mapping table
+    const {data: callMapping, error: mappingError} = await supabase
+      .from('twilio_ultravox_calls')
+      .select('twilio_call_sid, from_number, to_number')
+      .eq('ultravox_call_id', ultravoxCallId)
       .single();
 
-    if (clientError || !clientData) {
-      throw new Error(`No client found for phone number ${to_phone_number}`);
+    if (mappingError || !callMapping) {
+      logger.error({ultravoxCallId, mappingError}, 'Failed to find call mapping');
+      throw new Error(`No call mapping found for Ultravox call ${ultravoxCallId}`);
     }
 
-    if (!clientData.primary_transfer_number) {
-      throw new Error(`No primary_transfer_number configured for client ${clientData.name}`);
-    }
+    const call_sid = callMapping.twilio_call_sid;
+    const to_phone_number = callMapping.to_number;
 
-    const transferNumber = clientData.primary_transfer_number;
-
-    logger.info({
-      call_sid,
-      transferNumber,
-      clientName: clientData.name
-    }, 'Transferring call using Twilio REST API');
-
-    // Generate TwiML to dial the transfer number
-    // Use the Twilio number (to_phone_number) as caller ID since we can't spoof
-    const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Please hold while I transfer your call.</Say>
-  <Dial callerId="${to_phone_number}">${transferNumber}</Dial>
-</Response>`;
-
-    // Update the active call using Twilio REST API
-    await twilioClient.calls(call_sid).update({
-      twiml: transferTwiml
-    });
-
-    logger.info({call_sid, transferNumber}, 'Successfully initiated transfer via Twilio REST API');
-
-    // Respond to Ultravox tool call
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify({
-      success: true,
-      message: 'Transfer initiated'
-    }));
+    await performTransfer(call_sid, to_phone_number, toolData, res);
 
   } catch (err) {
     logger.error({err, toolData}, 'Error handling Twilio transfer');
@@ -461,6 +463,61 @@ async function handleTwilioTransfer(toolData, req, res) {
       error: err.message
     }));
   }
+}
+
+/**
+ * Perform the actual transfer via Twilio REST API
+ */
+async function performTransfer(call_sid, to_phone_number, toolData, res) {
+  logger.info({
+    call_sid,
+    to_phone_number
+  }, 'Performing Twilio transfer');
+
+  // Load client from database using the clinic number (to_phone_number)
+  const {data: clientData, error: clientError} = await supabase
+    .from('clients')
+    .select('*')
+    .eq('vetwise_phone', to_phone_number)
+    .single();
+
+  if (clientError || !clientData) {
+    throw new Error(`No client found for phone number ${to_phone_number}`);
+  }
+
+  if (!clientData.primary_transfer_number) {
+    throw new Error(`No primary_transfer_number configured for client ${clientData.name}`);
+  }
+
+  const transferNumber = clientData.primary_transfer_number;
+
+  logger.info({
+    call_sid,
+    transferNumber,
+    clientName: clientData.name
+  }, 'Transferring call using Twilio REST API');
+
+  // Generate TwiML to dial the transfer number
+  // Use the Twilio number (to_phone_number) as caller ID since we can't spoof
+  const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I transfer your call.</Say>
+  <Dial callerId="${to_phone_number}">${transferNumber}</Dial>
+</Response>`;
+
+  // Update the active call using Twilio REST API
+  await twilioClient.calls(call_sid).update({
+    twiml: transferTwiml
+  });
+
+  logger.info({call_sid, transferNumber}, 'Successfully initiated transfer via Twilio REST API');
+
+  // Respond to Ultravox tool call
+  res.writeHead(200, {'Content-Type': 'application/json'});
+  res.end(JSON.stringify({
+    success: true,
+    message: 'Transfer initiated'
+  }));
 }
 
 // HTTP request handler

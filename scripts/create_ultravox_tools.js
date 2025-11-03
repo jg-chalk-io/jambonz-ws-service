@@ -42,11 +42,6 @@ const tools = [
       },
       required: ['urgency_reason', 'caller_name', 'callback_number']
     },
-    staticParameters: {
-      call_sid: {
-        value: '{{call_sid}}'
-      }
-    },
     http: {
       baseUrlPattern: `${BASE_URL}/twilio/transferToOnCall`,
       httpMethod: 'POST'
