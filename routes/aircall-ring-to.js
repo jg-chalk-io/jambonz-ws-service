@@ -306,6 +306,11 @@ function parseRequestBody(req) {
 function sendResponse(res, statusCode, data) {
   const json = JSON.stringify(data);
 
+  logger.info({
+    statusCode,
+    response: data
+  }, 'Sending response to Aircall');
+
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(json)
