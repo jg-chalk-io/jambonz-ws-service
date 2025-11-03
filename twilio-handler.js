@@ -8,6 +8,7 @@ const {createToolHandlers, createTwilioTransfer} = require('./shared/tool-handle
 const {supabase} = require('./lib/supabase');
 const {ToolCallLogger} = require('./lib/tool-call-logger');
 const {determineTransferRoute} = require('./lib/transfer-router');
+const handleAircallRingTo = require('./routes/aircall-ring-to');
 
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3001;
@@ -776,16 +777,131 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route,
 }
 
 /**
- * Perform Jambonz SIP transfer (for non-Aircall SIP destinations)
- * TODO: Implement Twilio → Jambonz handoff for SIP routing
+ * Perform phone transfer via Jambonz trunk (for lower-cost VoIP.ms routing)
+ *
+ * Architecture:
+ * 1. Main call is on Twilio (caller → Twilio → Ultravox)
+ * 2. Use Jambonz API to originate outbound call to transfer destination via VoIP.ms
+ * 3. Use Twilio's <Dial><Conference> to bridge Twilio call with Jambonz call
+ *
+ * Cost Benefit:
+ * - Twilio PSTN: ~$0.013/min
+ * - VoIP.ms via Jambonz: ~$0.007/min (46% savings)
  */
-async function performJambonzSipTransfer(call_sid, route, res) {
-  logger.error({
+async function performJambonzPhoneTransfer(call_sid, originalCallerNumber, route, toolData, res) {
+  logger.info({
     call_sid,
-    sipUri: route.sipUri
-  }, 'Jambonz SIP transfers not yet implemented');
+    destination: route.destination,
+    originalCaller: originalCallerNumber
+  }, 'Performing phone transfer via Jambonz trunk');
 
-  throw new Error('Jambonz SIP transfers not yet implemented. Please use PSTN or Aircall SIP routing.');
+  // Create unique conference name for this transfer
+  const conferenceName = `transfer-${call_sid}-${Date.now()}`;
+
+  // Step 1: Put Twilio call into conference room
+  const twilioConferenceTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I connect you to our team.</Say>
+  <Dial>
+    <Conference beep="false" statusCallback="${BASE_URL}/twilio/conferenceStatus" statusCallbackEvent="start end join leave">${conferenceName}</Conference>
+  </Dial>
+</Response>`;
+
+  await twilioClient.calls(call_sid).update({
+    twiml: twilioConferenceTwiml
+  });
+
+  logger.info({
+    call_sid,
+    conferenceName
+  }, 'Twilio call placed in conference');
+
+  // Step 2: Use Jambonz to dial transfer destination and join same conference
+  const jambonzApp = [
+    {
+      verb: 'say',
+      text: 'Connecting you now.'
+    },
+    {
+      verb: 'dial',
+      callerId: originalCallerNumber || undefined,
+      target: [
+        {
+          type: 'phone',
+          number: route.destination,
+          trunk: 'voip.ms-jambonz'  // Use VoIP.ms trunk for lower cost
+        }
+      ],
+      answerOnBridge: true,
+      // When specialist answers, join the Twilio conference
+      action: {
+        url: `${BASE_URL}/jambonz/dialComplete`,
+        method: 'POST'
+      }
+    },
+    {
+      verb: 'dial',
+      target: [
+        {
+          type: 'sip',
+          sipUri: `sip:${conferenceName}@conference.twilio.com`  // Join Twilio conference
+        }
+      ]
+    }
+  ];
+
+  // Originate Jambonz call
+  const jambonzResponse = await fetch(`https://api.jambonz.cloud/v1/Accounts/${process.env.JAMBONZ_ACCOUNT_SID}/Calls`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.JAMBONZ_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      application_sid: process.env.JAMBONZ_APPLICATION_SID,
+      from: originalCallerNumber || '+12894730151',
+      to: {
+        type: 'phone',
+        number: route.destination,
+        trunk: 'voip.ms-jambonz'
+      },
+      tag: {
+        twilio_call_sid: call_sid,
+        transfer_type: 'jambonz_trunk'
+      }
+    })
+  });
+
+  if (!jambonzResponse.ok) {
+    const errorText = await jambonzResponse.text();
+    logger.error({
+      status: jambonzResponse.status,
+      error: errorText
+    }, 'Failed to originate Jambonz call');
+
+    throw new Error(`Jambonz API error: ${jambonzResponse.status}`);
+  }
+
+  const jambonzCall = await jambonzResponse.json();
+
+  logger.info({
+    call_sid,
+    jambonzCallSid: jambonzCall.sid,
+    destination: route.destination,
+    trunk: 'voip.ms-jambonz',
+    conferenceName
+  }, 'Successfully initiated Jambonz trunk transfer');
+
+  // Respond to Ultravox tool call
+  res.writeHead(200, {'Content-Type': 'application/json'});
+  res.end(JSON.stringify({
+    success: true,
+    message: 'Transfer initiated via Jambonz trunk',
+    transfer_type: route.type,
+    transfer_method: 'jambonz_trunk',
+    caller_id: originalCallerNumber,
+    routing: 'voip.ms'
+  }));
 }
 
 // HTTP request handler
@@ -844,6 +960,10 @@ server.on('request', (req, res) => {
 
         res.writeHead(200, {'Content-Type': 'text/xml'});
         res.end(dialTwiml);
+
+      } else if (req.url === '/aircall/ring-to' && req.method === 'POST') {
+        // Aircall Ring-to API widget - handles insight cards before routing
+        await handleAircallRingTo(req, res);
 
       } else if (req.url === '/health') {
         res.writeHead(200, {'Content-Type': 'application/json'});
