@@ -673,9 +673,15 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
  * - If associated with trunk: Routes through trunk's Origination URI (e.g., Aircall)
  * - If not associated: Routes through standard PSTN
  *
- * Caller ID & SIP Headers:
+ * Caller ID:
  * - Uses original caller's number as caller ID (not Twilio number)
- * - Sends custom X-headers with caller metadata for Aircall to display
+ * - Aircall agent sees the actual caller's phone number
+ *
+ * Note on SIP Headers:
+ * - Custom X-headers can ONLY be sent with <Sip> noun (not <Dial> with phone numbers)
+ * - Elastic SIP trunk routing uses phone number association, not <Sip> URIs
+ * - Therefore, custom headers cannot be sent through Elastic SIP trunks
+ * - Caller ID pass-through is the only metadata we can send
  */
 async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route, toolData, res) {
   logger.info({
@@ -686,37 +692,16 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route,
     urgencyReason: toolData.urgency_reason
   }, 'Performing phone transfer via Twilio (PSTN or Elastic SIP trunk auto-routing)');
 
-  // Build SIP headers with caller metadata for Aircall
-  // Format: ?X-Header1=value1&X-Header2=value2
-  const sipHeaders = [];
-
-  if (toolData.caller_name) {
-    sipHeaders.push(`X-Caller-Name=${encodeURIComponent(toolData.caller_name)}`);
-  }
-
-  if (toolData.urgency_reason) {
-    sipHeaders.push(`X-Urgency=${encodeURIComponent(toolData.urgency_reason)}`);
-  }
-
-  if (originalCallerNumber) {
-    // Also send as SIP header in case Aircall wants it
-    sipHeaders.push(`X-Original-Caller=${encodeURIComponent(originalCallerNumber)}`);
-  }
-
-  // Construct destination with SIP headers (only for SIP trunk routes)
-  const destinationWithHeaders = sipHeaders.length > 0
-    ? `${route.destination}?${sipHeaders.join('&')}`
-    : route.destination;
-
   // Use original caller's number as caller ID (pass-through)
   // If not available, omit callerId attribute to let Twilio use default
   const callerIdAttr = originalCallerNumber ? `callerId="${originalCallerNumber}"` : '';
 
   // Generate TwiML to dial the number
+  // NOTE: Cannot append ?X-Header syntax to phone numbers - only works with <Sip> noun
   const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Please hold while I transfer your call to our team.</Say>
-  <Dial ${callerIdAttr}>${destinationWithHeaders}</Dial>
+  <Dial ${callerIdAttr}>${route.destination}</Dial>
 </Response>`;
 
   // Update the active call using Twilio REST API
@@ -727,19 +712,17 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route,
   logger.info({
     call_sid,
     destination: route.destination,
-    originalCaller: originalCallerNumber,
-    sipHeadersCount: sipHeaders.length
-  }, 'Successfully initiated phone transfer with caller ID and metadata');
+    originalCaller: originalCallerNumber
+  }, 'Successfully initiated phone transfer with original caller ID');
 
   // Respond to Ultravox tool call
   res.writeHead(200, {'Content-Type': 'application/json'});
   res.end(JSON.stringify({
     success: true,
-    message: 'Phone transfer initiated with caller metadata',
+    message: 'Phone transfer initiated with caller ID',
     transfer_type: route.type,
     transfer_method: route.method,
-    caller_id: originalCallerNumber,
-    metadata_sent: sipHeaders.length > 0
+    caller_id: originalCallerNumber
   }));
 }
 
