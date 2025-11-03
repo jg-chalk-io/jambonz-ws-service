@@ -376,8 +376,8 @@ async function generateIncomingCallTwiML(from, to, callSid) {
         client_id: clientData.id,
         direction: 'inbound',
         status: 'in-progress',
-        ultravox_call_id: ultravoxResponse.callId,
-        start_time: new Date().toISOString()
+        ultravox_call_id: ultravoxResponse.callId
+        // created_at is set automatically by database DEFAULT NOW()
       })
       .select('id')
       .single();
