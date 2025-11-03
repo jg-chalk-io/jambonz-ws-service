@@ -497,25 +497,61 @@ async function handleTwilioTransfer(toolData, req, res) {
       return;
     }
 
-    // Fallback: Look up via Ultravox call ID
-    if (!ultravoxCallId) {
-      logger.error({toolData, headers: req.headers}, 'Cannot determine Ultravox call ID');
-      throw new Error('Cannot determine Ultravox call ID - no header or field found');
+    // Fallback 1: Look up via Ultravox call ID (if available)
+    if (ultravoxCallId) {
+      logger.info({ultravoxCallId}, 'Looking up Twilio call SID from Ultravox call ID');
+
+      const {data: callMapping, error: mappingError} = await supabase
+        .from('twilio_ultravox_calls')
+        .select('twilio_call_sid, from_number, to_number, ultravox_call_id')
+        .eq('ultravox_call_id', ultravoxCallId)
+        .single();
+
+      if (callMapping) {
+        const call_sid = callMapping.twilio_call_sid;
+        const to_phone_number = callMapping.to_number;
+
+        await performTransfer(call_sid, to_phone_number, toolData, res);
+
+        // Mark tool call as successful
+        if (logId) {
+          await ToolCallLogger.logSuccess(logId, {
+            call_sid,
+            ultravox_call_id: ultravoxCallId,
+            lookup_method: 'ultravox_call_id'
+          });
+        }
+        return;
+      }
+
+      logger.warn({ultravoxCallId, mappingError}, 'No mapping found via ultravox_call_id, trying callback_number');
     }
 
-    logger.info({ultravoxCallId}, 'Looking up Twilio call SID from Ultravox call ID');
+    // Fallback 2: Look up by callback_number (allows different callback number)
+    const callback_number = toolData.callback_number;
+    if (!callback_number) {
+      logger.error({toolData, headers: req.headers}, 'Cannot determine call - no ultravox_call_id or callback_number');
+      throw new Error('Cannot determine call - no ultravox_call_id or callback_number found');
+    }
 
-    // Look up Twilio call SID from mapping table
-    const {data: callMapping, error: mappingError} = await supabase
+    logger.info({callback_number}, 'Looking up recent call by callback_number');
+
+    // Find most recent call from this number (within last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const {data: recentCalls, error: lookupError} = await supabase
       .from('twilio_ultravox_calls')
-      .select('twilio_call_sid, from_number, to_number')
-      .eq('ultravox_call_id', ultravoxCallId)
-      .single();
+      .select('twilio_call_sid, from_number, to_number, ultravox_call_id, created_at')
+      .eq('from_number', callback_number)
+      .gte('created_at', fiveMinutesAgo)
+      .order('created_at', {ascending: false})
+      .limit(1);
 
-    if (mappingError || !callMapping) {
-      logger.error({ultravoxCallId, mappingError}, 'Failed to find call mapping');
-      throw new Error(`No call mapping found for Ultravox call ${ultravoxCallId}`);
+    if (lookupError || !recentCalls || recentCalls.length === 0) {
+      logger.error({callback_number, lookupError}, 'No recent call found for callback_number');
+      throw new Error(`No recent call found for callback_number ${callback_number}`);
     }
+
+    const callMapping = recentCalls[0];
 
     const call_sid = callMapping.twilio_call_sid;
     const to_phone_number = callMapping.to_number;
