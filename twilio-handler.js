@@ -657,21 +657,22 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
 }
 
 /**
- * Perform Twilio SIP transfer to Aircall
+ * Perform Twilio SIP transfer to Aircall via BYOC trunk
  */
 async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
   logger.info({
     call_sid,
-    sipUri: route.sipUri,
+    destination: route.destination,
     trunkSid: route.trunkSid
-  }, 'Performing Aircall SIP transfer via Twilio trunk');
+  }, 'Performing Aircall SIP transfer via Twilio BYOC trunk');
 
-  // Generate TwiML with SIP dial to Aircall
+  // Generate TwiML with Number + byoc attribute to route through SIP trunk
+  // Use <Number byoc="TRUNK_SID"> instead of <Sip> to properly route through configured trunk
   const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Please hold while I transfer your call to our team.</Say>
   <Dial callerId="${to_phone_number}">
-    <Sip>${route.sipUri}</Sip>
+    <Number byoc="${route.trunkSid}">${route.destination}</Number>
   </Dial>
 </Response>`;
 
@@ -682,14 +683,15 @@ async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
 
   logger.info({
     call_sid,
-    sipUri: route.sipUri
-  }, 'Successfully initiated Aircall SIP transfer');
+    destination: route.destination,
+    trunkSid: route.trunkSid
+  }, 'Successfully initiated Aircall SIP transfer via BYOC trunk');
 
   // Respond to Ultravox tool call
   res.writeHead(200, {'Content-Type': 'application/json'});
   res.end(JSON.stringify({
     success: true,
-    message: 'Aircall SIP transfer initiated',
+    message: 'Aircall SIP transfer initiated via BYOC trunk',
     transfer_type: route.type,
     transfer_method: route.method
   }));
