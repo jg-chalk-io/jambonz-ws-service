@@ -7,6 +7,7 @@ const {loadAgentDefinition} = require('./shared/agent-config');
 const {createToolHandlers, createTwilioTransfer} = require('./shared/tool-handlers');
 const {supabase} = require('./lib/supabase');
 const {ToolCallLogger} = require('./lib/tool-call-logger');
+const {determineTransferRoute} = require('./lib/transfer-router');
 
 const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 const PORT = process.env.PORT || 3001;
@@ -588,7 +589,7 @@ async function handleTwilioTransfer(toolData, req, res) {
 }
 
 /**
- * Perform the actual transfer via Twilio REST API
+ * Perform the actual transfer via Twilio REST API with intelligent routing
  */
 async function performTransfer(call_sid, to_phone_number, toolData, res) {
   logger.info({
@@ -613,18 +614,65 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
 
   const transferNumber = clientData.primary_transfer_number;
 
+  // Determine routing strategy based on transfer destination
+  const route = determineTransferRoute(transferNumber, clientData);
+
   logger.info({
     call_sid,
     transferNumber,
-    clientName: clientData.name
-  }, 'Transferring call using Twilio REST API');
+    clientName: clientData.name,
+    routeType: route.type,
+    routeMethod: route.method,
+    sipUri: route.sipUri
+  }, 'Determined transfer route');
 
-  // Generate TwiML to dial the transfer number
-  // Use the Twilio number (to_phone_number) as caller ID since we can't spoof
+  // Route based on method
+  if (route.method === 'twilio_sip') {
+    // Aircall SIP transfer via Twilio trunk
+    await performTwilioSipTransfer(call_sid, to_phone_number, route, res);
+
+  } else if (route.method === 'jambonz') {
+    // Other SIP transfer via Jambonz
+    await performJambonzSipTransfer(call_sid, route, res);
+
+  } else {
+    // PSTN transfer via Twilio
+    await performTwilioPstnTransfer(call_sid, to_phone_number, route, res);
+  }
+
+  // Log transfer type to database
+  await supabase
+    .from('call_logs')
+    .update({
+      transfer_type: route.type,
+      transfer_method: route.method
+    })
+    .eq('call_sid', call_sid);
+
+  logger.info({
+    call_sid,
+    transferType: route.type,
+    transferMethod: route.method
+  }, 'Transfer type logged to database');
+}
+
+/**
+ * Perform Twilio SIP transfer to Aircall
+ */
+async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
+  logger.info({
+    call_sid,
+    sipUri: route.sipUri,
+    trunkSid: route.trunkSid
+  }, 'Performing Aircall SIP transfer via Twilio trunk');
+
+  // Generate TwiML with SIP dial to Aircall
   const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Please hold while I transfer your call.</Say>
-  <Dial callerId="${to_phone_number}">${transferNumber}</Dial>
+  <Say>Please hold while I transfer your call to our team.</Say>
+  <Dial callerId="${to_phone_number}">
+    <Sip>${route.sipUri}</Sip>
+  </Dial>
 </Response>`;
 
   // Update the active call using Twilio REST API
@@ -632,14 +680,68 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
     twiml: transferTwiml
   });
 
-  logger.info({call_sid, transferNumber}, 'Successfully initiated transfer via Twilio REST API');
+  logger.info({
+    call_sid,
+    sipUri: route.sipUri
+  }, 'Successfully initiated Aircall SIP transfer');
 
   // Respond to Ultravox tool call
   res.writeHead(200, {'Content-Type': 'application/json'});
   res.end(JSON.stringify({
     success: true,
-    message: 'Transfer initiated'
+    message: 'Aircall SIP transfer initiated',
+    transfer_type: route.type,
+    transfer_method: route.method
   }));
+}
+
+/**
+ * Perform Twilio PSTN transfer (traditional phone number)
+ */
+async function performTwilioPstnTransfer(call_sid, to_phone_number, route, res) {
+  logger.info({
+    call_sid,
+    pstnNumber: route.destination
+  }, 'Performing PSTN transfer via Twilio');
+
+  // Generate TwiML to dial the transfer number
+  const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I transfer your call.</Say>
+  <Dial callerId="${to_phone_number}">${route.destination}</Dial>
+</Response>`;
+
+  // Update the active call using Twilio REST API
+  await twilioClient.calls(call_sid).update({
+    twiml: transferTwiml
+  });
+
+  logger.info({
+    call_sid,
+    pstnNumber: route.destination
+  }, 'Successfully initiated PSTN transfer');
+
+  // Respond to Ultravox tool call
+  res.writeHead(200, {'Content-Type': 'application/json'});
+  res.end(JSON.stringify({
+    success: true,
+    message: 'PSTN transfer initiated',
+    transfer_type: route.type,
+    transfer_method: route.method
+  }));
+}
+
+/**
+ * Perform Jambonz SIP transfer (for non-Aircall SIP destinations)
+ * TODO: Implement Twilio → Jambonz handoff for SIP routing
+ */
+async function performJambonzSipTransfer(call_sid, route, res) {
+  logger.error({
+    call_sid,
+    sipUri: route.sipUri
+  }, 'Jambonz SIP transfers not yet implemented');
+
+  throw new Error('Jambonz SIP transfers not yet implemented. Please use PSTN or Aircall SIP routing.');
 }
 
 // HTTP request handler
