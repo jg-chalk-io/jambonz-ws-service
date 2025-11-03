@@ -963,7 +963,9 @@ server.on('request', (req, res) => {
 
       } else if (req.url === '/aircall/ring-to' && req.method === 'POST') {
         // Aircall Ring-to API widget - handles insight cards before routing
-        await handleAircallRingTo(req, res);
+        // Parse JSON body (Aircall sends JSON, not form data)
+        const jsonData = body ? JSON.parse(body) : {};
+        await handleAircallRingTo(req, res, jsonData);
 
       } else if (req.url === '/health') {
         res.writeHead(200, {'Content-Type': 'application/json'});

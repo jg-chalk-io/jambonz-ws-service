@@ -21,13 +21,17 @@ const logger = pino({level: process.env.LOG_LEVEL || 'info'});
 
 /**
  * Handle Aircall Ring-to API request
+ *
+ * @param {Object} req - HTTP request
+ * @param {Object} res - HTTP response
+ * @param {Object} bodyData - Pre-parsed request body (optional, will parse if not provided)
  */
-async function handleAircallRingTo(req, res) {
+async function handleAircallRingTo(req, res, bodyData = null) {
   const startTime = Date.now();
 
   try {
-    // Parse request body
-    const body = await parseRequestBody(req);
+    // Use pre-parsed body if provided, otherwise parse from stream
+    const body = bodyData || await parseRequestBody(req);
 
     if (!body) {
       logger.error('Failed to parse request body');
