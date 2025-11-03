@@ -353,10 +353,7 @@ async function generateIncomingCallTwiML(from, to, callSid) {
 
   // Create Ultravox call via REST API using Agent Template
   const callConfig = {
-    templateContext,
-    requestContext: {
-      call_sid: callSid  // Pass call_sid in requestContext for tool static parameters
-    },
+    templateContext,  // call_sid already included in templateContext
     medium: {
       twilio: {}
     }
