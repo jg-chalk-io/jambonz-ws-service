@@ -657,23 +657,27 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
 }
 
 /**
- * Perform Twilio SIP transfer to Aircall via BYOC trunk
+ * Perform Twilio SIP transfer to Aircall via Elastic SIP trunk
+ *
+ * NOTE: Elastic SIP trunks (TK prefix) route automatically when:
+ * 1. The destination phone number is associated with the trunk
+ * 2. You just dial the number normally - no special TwiML needed
+ *
+ * The trunk handles routing to Aircall via the configured Origination URI
  */
 async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
   logger.info({
     call_sid,
     destination: route.destination,
     trunkSid: route.trunkSid
-  }, 'Performing Aircall SIP transfer via Twilio BYOC trunk');
+  }, 'Performing Aircall transfer via Elastic SIP trunk (phone number must be associated with trunk)');
 
-  // Generate TwiML with Number + byoc attribute to route through SIP trunk
-  // Use <Number byoc="TRUNK_SID"> instead of <Sip> to properly route through configured trunk
+  // Generate TwiML to dial the number - Elastic SIP trunk routes automatically
+  // The phone number MUST be associated with the trunk in Twilio console
   const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Please hold while I transfer your call to our team.</Say>
-  <Dial callerId="${to_phone_number}">
-    <Number byoc="${route.trunkSid}">${route.destination}</Number>
-  </Dial>
+  <Dial callerId="${to_phone_number}">${route.destination}</Dial>
 </Response>`;
 
   // Update the active call using Twilio REST API
@@ -685,13 +689,13 @@ async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
     call_sid,
     destination: route.destination,
     trunkSid: route.trunkSid
-  }, 'Successfully initiated Aircall SIP transfer via BYOC trunk');
+  }, 'Successfully initiated Aircall transfer (routing via Elastic SIP trunk)');
 
   // Respond to Ultravox tool call
   res.writeHead(200, {'Content-Type': 'application/json'});
   res.end(JSON.stringify({
     success: true,
-    message: 'Aircall SIP transfer initiated via BYOC trunk',
+    message: 'Aircall transfer initiated via Elastic SIP trunk',
     transfer_type: route.type,
     transfer_method: route.method
   }));
