@@ -438,8 +438,11 @@ async function handleTwilioTransfer(toolData, req, res) {
                         ? 'critical'
                         : 'urgent';
 
-    // Get ultravox_call_id for lookup
-    const ultravoxCallId = req.headers['x-ultravox-call-id'] || req.headers['x-call-id'];
+    // Get ultravox_call_id from multiple sources (priority order)
+    let ultravoxCallId = toolData.ultravox_call_id ||  // NEW: From tool staticParameters
+                         req.headers['x-ultravox-call-id'] ||
+                         req.headers['x-call-id'] ||
+                         toolData.callId;
 
     // Look up call_log_id from mapping if possible
     let callLogId = null;
@@ -468,11 +471,6 @@ async function handleTwilioTransfer(toolData, req, res) {
         timestamp: new Date().toISOString()
       }
     });
-
-    // Try additional sources for Ultravox call ID
-    if (!ultravoxCallId) {
-      ultravoxCallId = toolData.ultravox_call_id || toolData.callId;
-    }
 
     // If call_sid is present but looks like an uninterpolated template variable, ignore it
     const call_sid_from_tool = toolData.call_sid;
