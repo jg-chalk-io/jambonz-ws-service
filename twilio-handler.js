@@ -627,17 +627,17 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
   }, 'Determined transfer route');
 
   // Route based on method
-  if (route.method === 'twilio_sip') {
-    // Aircall SIP transfer via Twilio trunk
-    await performTwilioSipTransfer(call_sid, to_phone_number, route, res);
+  if (route.method === 'twilio_phone') {
+    // Phone number transfer via Twilio (PSTN or Elastic SIP trunk auto-routing)
+    await performTwilioPhoneTransfer(call_sid, to_phone_number, route, res);
 
   } else if (route.method === 'jambonz') {
-    // Other SIP transfer via Jambonz
+    // SIP URI transfer via Jambonz
     await performJambonzSipTransfer(call_sid, route, res);
 
   } else {
-    // PSTN transfer via Twilio
-    await performTwilioPstnTransfer(call_sid, to_phone_number, route, res);
+    // Fallback for legacy naming
+    await performTwilioPhoneTransfer(call_sid, to_phone_number, route, res);
   }
 
   // Log transfer type to database
@@ -657,23 +657,22 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
 }
 
 /**
- * Perform Twilio SIP transfer to Aircall via Elastic SIP trunk
+ * Perform Twilio phone number transfer (PSTN or Elastic SIP trunk auto-routing)
  *
- * NOTE: Elastic SIP trunks (TK prefix) route automatically when:
- * 1. The destination phone number is associated with the trunk
- * 2. You just dial the number normally - no special TwiML needed
+ * How Twilio Elastic SIP Trunks Work:
+ * - When you dial a phone number, Twilio checks if it's associated with a SIP trunk
+ * - If associated with trunk: Routes through trunk's Origination URI (e.g., Aircall)
+ * - If not associated: Routes through standard PSTN
  *
- * The trunk handles routing to Aircall via the configured Origination URI
+ * No special TwiML needed - just dial the number!
  */
-async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
+async function performTwilioPhoneTransfer(call_sid, to_phone_number, route, res) {
   logger.info({
     call_sid,
-    destination: route.destination,
-    trunkSid: route.trunkSid
-  }, 'Performing Aircall transfer via Elastic SIP trunk (phone number must be associated with trunk)');
+    destination: route.destination
+  }, 'Performing phone transfer via Twilio (PSTN or Elastic SIP trunk auto-routing)');
 
-  // Generate TwiML to dial the number - Elastic SIP trunk routes automatically
-  // The phone number MUST be associated with the trunk in Twilio console
+  // Generate TwiML to dial the number - Twilio handles routing automatically
   const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Please hold while I transfer your call to our team.</Say>
@@ -687,51 +686,14 @@ async function performTwilioSipTransfer(call_sid, to_phone_number, route, res) {
 
   logger.info({
     call_sid,
-    destination: route.destination,
-    trunkSid: route.trunkSid
-  }, 'Successfully initiated Aircall transfer (routing via Elastic SIP trunk)');
+    destination: route.destination
+  }, 'Successfully initiated phone transfer (Twilio auto-routing)');
 
   // Respond to Ultravox tool call
   res.writeHead(200, {'Content-Type': 'application/json'});
   res.end(JSON.stringify({
     success: true,
-    message: 'Aircall transfer initiated via Elastic SIP trunk',
-    transfer_type: route.type,
-    transfer_method: route.method
-  }));
-}
-
-/**
- * Perform Twilio PSTN transfer (traditional phone number)
- */
-async function performTwilioPstnTransfer(call_sid, to_phone_number, route, res) {
-  logger.info({
-    call_sid,
-    pstnNumber: route.destination
-  }, 'Performing PSTN transfer via Twilio');
-
-  // Generate TwiML to dial the transfer number
-  const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Please hold while I transfer your call.</Say>
-  <Dial callerId="${to_phone_number}">${route.destination}</Dial>
-</Response>`;
-
-  // Update the active call using Twilio REST API
-  await twilioClient.calls(call_sid).update({
-    twiml: transferTwiml
-  });
-
-  logger.info({
-    call_sid,
-    pstnNumber: route.destination
-  }, 'Successfully initiated PSTN transfer');
-
-  // Respond to Ultravox tool call
-  res.writeHead(200, {'Content-Type': 'application/json'});
-  res.end(JSON.stringify({
-    success: true,
-    message: 'PSTN transfer initiated',
+    message: 'Phone transfer initiated',
     transfer_type: route.type,
     transfer_method: route.method
   }));
