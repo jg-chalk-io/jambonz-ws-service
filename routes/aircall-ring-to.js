@@ -38,7 +38,10 @@ async function handleAircallRingTo(req, res, bodyData = null) {
       return sendResponse(res, 400, {error: 'Invalid request body'});
     }
 
-    const {call_id, caller_number, target_number} = body;
+    // Extract parameters - support both call_id and callUUID
+    const call_id = body.call_id || body.callUUID;
+    const caller_number = body.caller_number || body.callerNumber;
+    const target_number = body.target_number || body.targetNumber;
 
     logger.info({
       call_id,
