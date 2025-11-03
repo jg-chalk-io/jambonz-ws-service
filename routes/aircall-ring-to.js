@@ -252,15 +252,16 @@ function getRoutingTarget(result) {
     return {};
   }
 
-  // Return format that supports multiple Aircall response path configurations
-  // Widget can be configured to extract from:
-  // - data.team_id (single object)
-  // - data[0].team_id (array format)
-  // - data.user_id (if routing to specific user instead)
+  // Return format for Aircall Ring-to widget with separate paths:
+  // - Path to Target Type: data.target_type
+  // - Path to Target Value: data.target_id
   return {
     data: {
+      target_type: 'team',
+      target_id: teamId,
+      // Also include alternate formats for flexibility
       team_id: teamId,
-      user_id: teamId  // Same value, allows flexibility in widget config
+      user_id: teamId
     }
   };
 }
