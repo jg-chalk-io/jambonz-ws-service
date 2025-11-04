@@ -709,58 +709,6 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
     .eq('twilio_call_sid', call_sid)
     .single();
 
-  const to_phone_number = callMapping?.to_number;
-
-  const {data: clientData} = await supabase
-    .from('clients')
-    .select('primary_transfer_number')
-    .eq('vetwise_phone', to_phone_number)
-    .single();
-
-  // Check if this is the Aircall number (+13652972501)
-  // If yes, use <Sip> noun to ONLY use SIP trunk and avoid double billing
-  const isAircallNumber = route.destination === '+13652972501';
-
-  // Use original caller's number as caller ID (pass-through)
-  // If not available, omit callerId attribute to let Twilio use default
-  const callerIdAttr = originalCallerNumber ? `callerId="${originalCallerNumber}"` : '';
-
-  let transferTwiml;
-
-  if (isAircallNumber) {
-    // Use <Sip> noun with full SIP URI to ONLY use SIP trunk (no PSTN attempt)
-    // This avoids double billing (PSTN + SIP trunk charges)
-    const sipUri = `sip:${route.destination}@aircall-custom.sip.us1.twilio.com`;
-
-    transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Please hold while I transfer your call to our team.</Say>
-  <Dial ${callerIdAttr}>
-    <Sip>${sipUri}</Sip>
-  </Dial>
-</Response>`;
-
-    logger.info({
-      call_sid,
-      sipUri,
-      originalCaller: originalCallerNumber
-    }, 'Using <Sip> noun for Aircall to avoid double billing');
-
-  } else {
-    // For non-Aircall numbers, use regular <Dial> with phone number
-    transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Please hold while I transfer your call to our team.</Say>
-  <Dial ${callerIdAttr}>${route.destination}</Dial>
-</Response>`;
-
-    logger.info({
-      call_sid,
-      destination: route.destination,
-      originalCaller: originalCallerNumber
-    }, 'Using <Dial> for PSTN routing');
-  }
-
   // Check if this is Aircall transfer (uses SIP trunk)
   const isAircallNumber = route.destination === '+13652972501';
 
