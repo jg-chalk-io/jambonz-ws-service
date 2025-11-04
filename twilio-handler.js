@@ -558,13 +558,14 @@ async function handleTwilioTransfer(toolData, req, res) {
     const call_sid = callMapping.twilio_call_sid;
     const to_phone_number = callMapping.to_number;
 
-    await performTransfer(call_sid, to_phone_number, toolData, res);
+    await performTransfer(call_sid, to_phone_number, ultravoxCallId, toolData, res);
 
     // Mark tool call as successful
     if (logId) {
       await ToolCallLogger.logSuccess(logId, {
         call_sid,
         to_phone_number,
+        ultravox_call_id: ultravoxCallId,
         transfer_completed_at: new Date().toISOString()
       });
     }
@@ -592,10 +593,11 @@ async function handleTwilioTransfer(toolData, req, res) {
 /**
  * Perform the actual transfer via Twilio REST API with intelligent routing
  */
-async function performTransfer(call_sid, to_phone_number, toolData, res) {
+async function performTransfer(call_sid, to_phone_number, ultravoxCallId, toolData, res) {
   logger.info({
     call_sid,
-    to_phone_number
+    to_phone_number,
+    ultravoxCallId
   }, 'Performing Twilio transfer');
 
   // Load client from database using the clinic number (to_phone_number)
@@ -639,7 +641,7 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
   // Route based on method
   if (route.method === 'twilio_phone') {
     // Phone number transfer via Twilio (PSTN or Elastic SIP trunk auto-routing)
-    await performTwilioPhoneTransfer(call_sid, originalCallerNumber, route, toolData, res);
+    await performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultravoxCallId, route, toolData, res);
 
   } else if (route.method === 'jambonz') {
     // SIP URI transfer via Jambonz
@@ -647,7 +649,7 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
 
   } else {
     // Fallback for legacy naming
-    await performTwilioPhoneTransfer(call_sid, originalCallerNumber, route, toolData, res);
+    await performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultravoxCallId, route, toolData, res);
   }
 
   // Log transfer type to database
@@ -669,10 +671,18 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
 /**
  * Perform Twilio phone number transfer (PSTN or Elastic SIP trunk auto-routing)
  *
- * How Twilio Elastic SIP Trunks Work:
- * - When you dial a phone number, Twilio checks if it's associated with a SIP trunk
- * - If associated with trunk: Routes through trunk's Origination URI (e.g., Aircall)
- * - If not associated: Routes through standard PSTN
+ * Transfer Strategy for Active Media Streams:
+ * 1. End Ultravox call gracefully via API (stops <Connect><Stream>)
+ * 2. Wait for stream termination (~1-2 seconds)
+ * 3. Initiate outbound call to customer
+ * 4. When customer answers, immediately dial transfer destination
+ * 5. For Aircall: Ring-to widget receives call and displays insight card
+ *
+ * Why This Approach:
+ * - Cannot update TwiML during active <Connect><Stream> (Twilio returns 404)
+ * - Only way to stop bidirectional stream is to end the call
+ * - Using Ultravox API DELETE allows graceful termination
+ * - Outbound call bridge reconnects customer without them noticing
  *
  * Caller ID:
  * - Uses original caller's number as caller ID (not Twilio number)
@@ -684,7 +694,7 @@ async function performTransfer(call_sid, to_phone_number, toolData, res) {
  * - Therefore, custom headers cannot be sent through Elastic SIP trunks
  * - Caller ID pass-through is the only metadata we can send
  */
-async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route, toolData, res) {
+async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultravoxCallId, route, toolData, res) {
   logger.info({
     call_sid,
     destination: route.destination,
@@ -752,36 +762,134 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route,
     }, 'Using <Dial> for PSTN routing');
   }
 
-  // Update the active call using Twilio REST API
-  // Redirect to executeDial which will end stream and perform transfer
-  const redirectUrl = `${BASE_URL}/twilio/executeDial?number=${encodeURIComponent(route.destination)}&caller=${encodeURIComponent(originalCallerNumber || '')}`;
-
-  const redirectTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Redirect>${redirectUrl}</Redirect>
-</Response>`;
-
-  await twilioClient.calls(call_sid).update({
-    twiml: redirectTwiml
-  });
-
+  // STEP 1: End Ultravox call gracefully to stop the media stream
+  // This is required because we cannot update TwiML during active <Connect><Stream>
   logger.info({
     call_sid,
-    destination: route.destination,
-    isAircall: isAircallNumber,
-    originalCaller: originalCallerNumber
-  }, 'Successfully initiated phone transfer');
+    ultravoxCallId,
+    destination: route.destination
+  }, 'Ending Ultravox call to stop media stream before transfer');
 
-  // Respond to Ultravox tool call
-  res.writeHead(200, {'Content-Type': 'application/json'});
-  res.end(JSON.stringify({
-    success: true,
-    message: 'Phone transfer initiated',
-    transfer_type: route.type,
-    transfer_method: route.method,
-    caller_id: originalCallerNumber,
-    routing: isAircallNumber ? 'sip' : 'pstn'
-  }));
+  try {
+    const ultravoxApiKey = process.env.ULTRAVOX_API_KEY;
+    if (!ultravoxApiKey) {
+      throw new Error('ULTRAVOX_API_KEY not configured');
+    }
+
+    // Delete the Ultravox call via API (graceful termination)
+    const ultravoxResponse = await fetch(`https://api.ultravox.ai/api/calls/${ultravoxCallId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-API-Key': ultravoxApiKey
+      }
+    });
+
+    if (!ultravoxResponse.ok) {
+      const errorText = await ultravoxResponse.text();
+      logger.error({
+        ultravoxCallId,
+        status: ultravoxResponse.status,
+        error: errorText
+      }, 'Failed to end Ultravox call');
+      throw new Error(`Ultravox DELETE failed: ${ultravoxResponse.status} - ${errorText}`);
+    }
+
+    logger.info({ultravoxCallId}, 'Ultravox call ended successfully, waiting for stream termination');
+
+    // Respond to tool call immediately (don't block)
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Transfer initiated - ending AI call and bridging to team'
+    }));
+
+    // STEP 2: Wait for stream to terminate (~1-2 seconds)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // STEP 3: Initiate outbound call to customer
+    // When customer answers, TwiML will immediately dial the transfer destination
+    logger.info({
+      call_sid,
+      originalCaller: originalCallerNumber,
+      destination: route.destination
+    }, 'Initiating outbound call to bridge customer to transfer destination');
+
+    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+
+    if (!twilioAccountSid || !twilioAuthToken) {
+      throw new Error('TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not configured');
+    }
+
+    // Build TwiML URL for outbound call
+    const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
+    const twimlUrl = `${baseUrl}/twilio/executeDial?number=${encodeURIComponent(route.destination)}&caller=${encodeURIComponent(originalCallerNumber || '')}`;
+
+    // Initiate outbound call using Twilio REST API
+    const twilioCallResponse = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Calls.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          To: originalCallerNumber,
+          From: '+16479526096', // Our Twilio number
+          Url: twimlUrl,
+          StatusCallback: `${baseUrl}/twilio/call-status`,
+          StatusCallbackEvent: ['completed', 'failed']
+        }).toString()
+      }
+    );
+
+    if (!twilioCallResponse.ok) {
+      const errorText = await twilioCallResponse.text();
+      logger.error({
+        status: twilioCallResponse.status,
+        error: errorText
+      }, 'Failed to initiate outbound Twilio call');
+      throw new Error(`Twilio call creation failed: ${twilioCallResponse.status}`);
+    }
+
+    const twilioCallData = await twilioCallResponse.json();
+
+    logger.info({
+      newCallSid: twilioCallData.sid,
+      originalCallSid: call_sid,
+      to: originalCallerNumber,
+      destination: route.destination
+    }, 'Outbound call initiated successfully - customer will be bridged to transfer destination');
+
+    // Update call_logs with new call SID for tracking
+    await supabase
+      .from('call_logs')
+      .update({
+        transferred_to_human: true,
+        transfer_call_sid: twilioCallData.sid
+      })
+      .eq('call_sid', call_sid);
+
+  } catch (err) {
+    logger.error({
+      err,
+      call_sid,
+      ultravoxCallId,
+      destination: route.destination
+    }, 'Error during transfer process');
+
+    // If response hasn't been sent yet, send error response
+    if (!res.headersSent) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        success: false,
+        error: err.message
+      }));
+    }
+
+    throw err;
+  }
 }
 
 /**
