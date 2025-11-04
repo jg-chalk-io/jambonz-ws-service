@@ -669,30 +669,29 @@ async function performTransfer(call_sid, to_phone_number, ultravoxCallId, toolDa
 }
 
 /**
- * Perform Twilio phone number transfer (PSTN or Elastic SIP trunk auto-routing)
+ * Perform Twilio phone number transfer from active media stream
  *
- * Transfer Strategy for Active Media Streams:
- * 1. End Ultravox call gracefully via API (stops <Connect><Stream>)
- * 2. Wait for stream termination (~1-2 seconds)
- * 3. Initiate outbound call to customer
- * 4. When customer answers, immediately dial transfer destination
- * 5. For Aircall: Ring-to widget receives call and displays insight card
+ * Transfer Strategy for <Connect><Stream> (Bidirectional):
+ * 1. Close WebSocket connection by ending Ultravox call via DELETE API
+ * 2. Wait briefly for WebSocket to close (~1 second)
+ * 3. Use Twilio REST API to update call with new TwiML containing <Dial>
+ * 4. Transfer executes entirely within Twilio (no additional SIP charges)
  *
- * Why This Approach:
- * - Cannot update TwiML during active <Connect><Stream> (Twilio returns 404)
- * - Only way to stop bidirectional stream is to end the call
- * - Using Ultravox API DELETE allows graceful termination
- * - Outbound call bridge reconnects customer without them noticing
+ * Why This Works:
+ * - <Connect><Stream> blocks subsequent TwiML until WebSocket closes
+ * - Ending Ultravox call gracefully closes the WebSocket
+ * - Once closed, we can inject new TwiML via REST API
+ * - Twilio executes the <Dial> verb to transfer the call
  *
- * Caller ID:
- * - Uses original caller's number as caller ID (not Twilio number)
- * - Aircall agent sees the actual caller's phone number
+ * Aircall Integration:
+ * - Uses Elastic SIP trunk routing (phone number association)
+ * - Caller ID pass-through shows original caller to Aircall agent
+ * - Aircall Ring-to widget displays insight card before agent answers
  *
- * Note on SIP Headers:
- * - Custom X-headers can ONLY be sent with <Sip> noun (not <Dial> with phone numbers)
- * - Elastic SIP trunk routing uses phone number association, not <Sip> URIs
- * - Therefore, custom headers cannot be sent through Elastic SIP trunks
- * - Caller ID pass-through is the only metadata we can send
+ * Cost Efficiency:
+ * - Transfer happens within Twilio (PSTN or Elastic SIP)
+ * - No Ultravox SIP charges (Ultravox call already ended)
+ * - No additional outbound calls needed
  */
 async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultravoxCallId, route, toolData, res) {
   logger.info({
@@ -762,13 +761,15 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
     }, 'Using <Dial> for PSTN routing');
   }
 
-  // STEP 1: End Ultravox call gracefully to stop the media stream
-  // This is required because we cannot update TwiML during active <Connect><Stream>
+  // Check if this is Aircall transfer (uses SIP trunk)
+  const isAircallNumber = route.destination === '+13652972501';
+
   logger.info({
     call_sid,
     ultravoxCallId,
-    destination: route.destination
-  }, 'Ending Ultravox call to stop media stream before transfer');
+    destination: route.destination,
+    isAircall: isAircallNumber
+  }, 'Starting transfer process');
 
   try {
     const ultravoxApiKey = process.env.ULTRAVOX_API_KEY;
@@ -776,7 +777,10 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
       throw new Error('ULTRAVOX_API_KEY not configured');
     }
 
-    // Delete the Ultravox call via API (graceful termination)
+    // STEP 1: End Ultravox call to close WebSocket connection
+    // This stops the <Connect><Stream> and allows TwiML updates
+    logger.info({ultravoxCallId}, 'Ending Ultravox call to close WebSocket stream');
+
     const ultravoxResponse = await fetch(`https://api.ultravox.ai/api/calls/${ultravoxCallId}`, {
       method: 'DELETE',
       headers: {
@@ -794,82 +798,80 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
       throw new Error(`Ultravox DELETE failed: ${ultravoxResponse.status} - ${errorText}`);
     }
 
-    logger.info({ultravoxCallId}, 'Ultravox call ended successfully, waiting for stream termination');
+    logger.info({ultravoxCallId}, 'Ultravox call ended - WebSocket closing');
 
-    // Respond to tool call immediately (don't block)
+    // Respond to tool call immediately
     res.writeHead(200, {'Content-Type': 'application/json'});
     res.end(JSON.stringify({
       success: true,
-      message: 'Transfer initiated - ending AI call and bridging to team'
+      message: 'Transfer initiated - connecting you now'
     }));
 
-    // STEP 2: Wait for stream to terminate (~1-2 seconds)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // STEP 2: Wait for WebSocket to close (~1 second)
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // STEP 3: Initiate outbound call to customer
-    // When customer answers, TwiML will immediately dial the transfer destination
+    // STEP 3: Build transfer TwiML
+    let transferTwiml;
+
+    if (isAircallNumber) {
+      // Aircall: Use <Sip> noun with Elastic SIP trunk
+      // Caller ID pass-through shows original caller to Aircall agent
+      const callerIdAttr = originalCallerNumber ? `callerId="${originalCallerNumber}"` : '';
+
+      transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I connect you to our team.</Say>
+  <Dial ${callerIdAttr}>
+    <Sip>sip:${route.destination}@aircall-custom.sip.us1.twilio.com</Sip>
+  </Dial>
+</Response>`;
+
+      logger.info({
+        call_sid,
+        sipUri: `sip:${route.destination}@aircall-custom.sip.us1.twilio.com`,
+        originalCaller: originalCallerNumber
+      }, 'Using SIP trunk for Aircall transfer');
+
+    } else {
+      // Standard PSTN transfer
+      const callerIdAttr = originalCallerNumber ? `callerId="${originalCallerNumber}"` : '';
+
+      transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I connect you to our team.</Say>
+  <Dial ${callerIdAttr}>${route.destination}</Dial>
+</Response>`;
+
+      logger.info({
+        call_sid,
+        destination: route.destination,
+        originalCaller: originalCallerNumber
+      }, 'Using PSTN for standard transfer');
+    }
+
+    // STEP 4: Update call with new TwiML using Twilio REST API
+    logger.info({call_sid}, 'Updating call with transfer TwiML');
+
+    const updateResult = await twilioClient.calls(call_sid).update({
+      twiml: transferTwiml
+    });
+
     logger.info({
       call_sid,
-      originalCaller: originalCallerNumber,
+      status: updateResult.status,
       destination: route.destination
-    }, 'Initiating outbound call to bridge customer to transfer destination');
+    }, 'Transfer TwiML injected successfully');
 
-    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-
-    if (!twilioAccountSid || !twilioAuthToken) {
-      throw new Error('TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not configured');
-    }
-
-    // Build TwiML URL for outbound call
-    const baseUrl = process.env.BASE_URL || 'https://jambonz-ws-service-production.up.railway.app';
-    const twimlUrl = `${baseUrl}/twilio/executeDial?number=${encodeURIComponent(route.destination)}&caller=${encodeURIComponent(originalCallerNumber || '')}`;
-
-    // Initiate outbound call using Twilio REST API
-    const twilioCallResponse = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Calls.json`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64'),
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-          To: originalCallerNumber,
-          From: '+16479526096', // Our Twilio number
-          Url: twimlUrl,
-          StatusCallback: `${baseUrl}/twilio/call-status`,
-          StatusCallbackEvent: ['completed', 'failed']
-        }).toString()
-      }
-    );
-
-    if (!twilioCallResponse.ok) {
-      const errorText = await twilioCallResponse.text();
-      logger.error({
-        status: twilioCallResponse.status,
-        error: errorText
-      }, 'Failed to initiate outbound Twilio call');
-      throw new Error(`Twilio call creation failed: ${twilioCallResponse.status}`);
-    }
-
-    const twilioCallData = await twilioCallResponse.json();
-
-    logger.info({
-      newCallSid: twilioCallData.sid,
-      originalCallSid: call_sid,
-      to: originalCallerNumber,
-      destination: route.destination
-    }, 'Outbound call initiated successfully - customer will be bridged to transfer destination');
-
-    // Update call_logs with new call SID for tracking
+    // Update database
     await supabase
       .from('call_logs')
       .update({
         transferred_to_human: true,
-        transfer_call_sid: twilioCallData.sid
+        transfer_completed_at: new Date().toISOString()
       })
       .eq('call_sid', call_sid);
+
+    logger.info({call_sid}, 'Transfer completed - call now connecting to destination');
 
   } catch (err) {
     logger.error({
