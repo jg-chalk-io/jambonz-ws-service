@@ -495,7 +495,7 @@ async function handleTwilioTransfer(toolData, req, res) {
 
       const to_phone_number = callMapping?.to_number || callback_number;
 
-      await performTransfer(call_sid_from_tool, to_phone_number, toolData, res);
+      await performTransfer(call_sid_from_tool, to_phone_number, ultravoxCallId, toolData, res);
       return;
     }
 
@@ -513,7 +513,7 @@ async function handleTwilioTransfer(toolData, req, res) {
         const call_sid = callMapping.twilio_call_sid;
         const to_phone_number = callMapping.to_number;
 
-        await performTransfer(call_sid, to_phone_number, toolData, res);
+        await performTransfer(call_sid, to_phone_number, ultravoxCallId, toolData, res);
 
         // Mark tool call as successful
         if (logId) {
