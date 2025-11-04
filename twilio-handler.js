@@ -430,17 +430,20 @@ async function generateIncomingCallTwiML(from, to, callSid) {
 async function handleStreamStatus(data, req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const call_sid = url.searchParams.get('callSid');
-  const streamStatus = data.StreamStatus;
+
+  // Twilio sends StreamEvent (not StreamStatus) for stream callbacks
+  const streamEvent = data.StreamEvent || data.StreamStatus;
 
   logger.info({
     call_sid,
-    streamStatus,
+    streamEvent,
     data
   }, 'Stream status callback received');
 
   // Only proceed if stream ended
-  if (streamStatus !== 'stopped' && streamStatus !== 'ended') {
-    logger.info({call_sid, streamStatus}, 'Stream not ended yet - no action');
+  // StreamEvent values: "stream-started", "stream-stopped"
+  if (streamEvent !== 'stream-stopped' && streamEvent !== 'stopped' && streamEvent !== 'ended') {
+    logger.info({call_sid, streamEvent}, 'Stream not ended yet - no action');
     res.writeHead(200, {'Content-Type': 'text/xml'});
     res.end('<Response></Response>');
     return;
