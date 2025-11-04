@@ -753,30 +753,17 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, route,
   }
 
   // Update the active call using Twilio REST API
-  // Retry logic to handle race condition where call was just created
-  let retryCount = 0;
-  const maxRetries = 3;
-  let lastError;
+  // Redirect to executeDial which will end stream and perform transfer
+  const redirectUrl = `${BASE_URL}/twilio/executeDial?number=${encodeURIComponent(route.destination)}&caller=${encodeURIComponent(originalCallerNumber || '')}`;
 
-  while (retryCount < maxRetries) {
-    try {
-      await twilioClient.calls(call_sid).update({
-        twiml: transferTwiml
-      });
-      break; // Success - exit retry loop
-    } catch (err) {
-      lastError = err;
-      if (err.status === 404 && retryCount < maxRetries - 1) {
-        // Call not found yet - wait and retry
-        retryCount++;
-        logger.warn({call_sid, retryCount}, 'Call not found yet, retrying after delay');
-        await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
-      } else {
-        // Different error or max retries reached - throw it
-        throw err;
-      }
-    }
-  }
+  const redirectTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Redirect>${redirectUrl}</Redirect>
+</Response>`;
+
+  await twilioClient.calls(call_sid).update({
+    twiml: redirectTwiml
+  });
 
   logger.info({
     call_sid,
@@ -968,16 +955,34 @@ server.on('request', (req, res) => {
         // Extract parameters from query string
         const url = new URL(req.url, `http://${req.headers.host}`);
         const number = url.searchParams.get('number') || TRANSFER_NUMBER;
+        const caller = url.searchParams.get('caller') || '';
         const reason = url.searchParams.get('reason') || 'emergency';
 
-        logger.info({number, reason}, 'Executing dial after Ultravox stream ended');
+        logger.info({number, caller, reason}, 'Executing dial after Ultravox stream ended');
 
-        // Return TwiML with Dial verb
-        const dialTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+        // Check if this is an Aircall number
+        const isAircallNumber = number === '+13652972501';
+
+        let dialTwiml;
+        if (isAircallNumber) {
+          // Use SIP for Aircall to avoid double billing
+          const callerIdAttr = caller ? `callerId="${caller}"` : '';
+          dialTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Connecting you to our on-call team now.</Say>
-  <Dial>${number}</Dial>
+  <Say>Connecting you to our team now.</Say>
+  <Dial ${callerIdAttr}>
+    <Sip>sip:${number}@aircall-custom.sip.us1.twilio.com</Sip>
+  </Dial>
 </Response>`;
+        } else {
+          // Standard PSTN dial
+          const callerIdAttr = caller ? `callerId="${caller}"` : '';
+          dialTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Connecting you to our team now.</Say>
+  <Dial ${callerIdAttr}>${number}</Dial>
+</Response>`;
+        }
 
         res.writeHead(200, {'Content-Type': 'text/xml'});
         res.end(dialTwiml);
