@@ -765,7 +765,19 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
       }, 'Using PSTN for standard transfer');
     }
 
-    // STEP 2: Update call with new TwiML using Twilio REST API
+    // STEP 2: First verify the call exists and get its current status
+    logger.info({call_sid}, 'Fetching call status before update');
+
+    const callStatus = await twilioClient.calls(call_sid).fetch();
+
+    logger.info({
+      call_sid,
+      status: callStatus.status,
+      direction: callStatus.direction,
+      startTime: callStatus.startTime
+    }, 'Call status fetched');
+
+    // STEP 3: Update call with new TwiML using Twilio REST API
     logger.info({call_sid}, 'Updating call with transfer TwiML');
 
     const updateResult = await twilioClient.calls(call_sid).update({
@@ -778,14 +790,14 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
       destination: route.destination
     }, 'Transfer TwiML injected successfully');
 
-    // STEP 3: Respond to HTTP tool call
+    // STEP 4: Respond to HTTP tool call
     res.writeHead(200, {'Content-Type': 'application/json'});
     res.end(JSON.stringify({
       success: true,
       message: 'Transfer completed'
     }));
 
-    // STEP 4: Update database
+    // STEP 5: Update database
     await supabase
       .from('call_logs')
       .update({
