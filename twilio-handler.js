@@ -669,19 +669,25 @@ async function performTransfer(call_sid, to_phone_number, ultravoxCallId, toolDa
 }
 
 /**
- * Perform Twilio phone number transfer from active media stream
+ * Perform Twilio phone number transfer using HTTP tool approach
  *
- * Transfer Strategy for <Connect><Stream> (Bidirectional):
- * 1. Close WebSocket connection by ending Ultravox call via DELETE API
- * 2. Wait briefly for WebSocket to close (~1 second)
- * 3. Use Twilio REST API to update call with new TwiML containing <Dial>
- * 4. Transfer executes entirely within Twilio (no additional SIP charges)
+ * Transfer Strategy (HTTP Tool Method):
+ * 1. Ultravox invokes HTTP tool → makes POST to /twilio/transferToOnCall
+ * 2. While Ultravox waits for HTTP response, update Twilio call with new TwiML
+ * 3. Twilio executes <Dial> verb to transfer the call
+ * 4. Return success response to Ultravox HTTP tool
+ * 5. Ultravox continues briefly then ends naturally
  *
  * Why This Works:
- * - <Connect><Stream> blocks subsequent TwiML until WebSocket closes
- * - Ending Ultravox call gracefully closes the WebSocket
- * - Once closed, we can inject new TwiML via REST API
- * - Twilio executes the <Dial> verb to transfer the call
+ * - HTTP tools execute OUTSIDE the media stream
+ * - While Ultravox waits for response, we can update TwiML
+ * - twilioClient.calls(sid).update() works during HTTP tool invocation
+ * - No need to DELETE Ultravox call (not allowed during active calls anyway)
+ * - Once transfer connects, customer is bridged and Ultravox ends naturally
+ *
+ * Key Difference from Client-Side Tools:
+ * - Client-side tools execute IN the stream (blocks TwiML updates)
+ * - HTTP tools execute via webhook (allows TwiML updates)
  *
  * Aircall Integration:
  * - Uses Elastic SIP trunk routing (phone number association)
@@ -690,7 +696,7 @@ async function performTransfer(call_sid, to_phone_number, ultravoxCallId, toolDa
  *
  * Cost Efficiency:
  * - Transfer happens within Twilio (PSTN or Elastic SIP)
- * - No Ultravox SIP charges (Ultravox call already ended)
+ * - Ultravox call ends naturally after tool completes
  * - No additional outbound calls needed
  */
 async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultravoxCallId, route, toolData, res) {
@@ -720,45 +726,7 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
   }, 'Starting transfer process');
 
   try {
-    const ultravoxApiKey = process.env.ULTRAVOX_API_KEY;
-    if (!ultravoxApiKey) {
-      throw new Error('ULTRAVOX_API_KEY not configured');
-    }
-
-    // STEP 1: End Ultravox call to close WebSocket connection
-    // This stops the <Connect><Stream> and allows TwiML updates
-    logger.info({ultravoxCallId}, 'Ending Ultravox call to close WebSocket stream');
-
-    const ultravoxResponse = await fetch(`https://api.ultravox.ai/api/calls/${ultravoxCallId}`, {
-      method: 'DELETE',
-      headers: {
-        'X-API-Key': ultravoxApiKey
-      }
-    });
-
-    if (!ultravoxResponse.ok) {
-      const errorText = await ultravoxResponse.text();
-      logger.error({
-        ultravoxCallId,
-        status: ultravoxResponse.status,
-        error: errorText
-      }, 'Failed to end Ultravox call');
-      throw new Error(`Ultravox DELETE failed: ${ultravoxResponse.status} - ${errorText}`);
-    }
-
-    logger.info({ultravoxCallId}, 'Ultravox call ended - WebSocket closing');
-
-    // Respond to tool call immediately
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify({
-      success: true,
-      message: 'Transfer initiated - connecting you now'
-    }));
-
-    // STEP 2: Wait for WebSocket to close (~1 second)
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // STEP 3: Build transfer TwiML
+    // STEP 1: Build transfer TwiML
     let transferTwiml;
 
     if (isAircallNumber) {
@@ -797,7 +765,7 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
       }, 'Using PSTN for standard transfer');
     }
 
-    // STEP 4: Update call with new TwiML using Twilio REST API
+    // STEP 2: Update call with new TwiML using Twilio REST API
     logger.info({call_sid}, 'Updating call with transfer TwiML');
 
     const updateResult = await twilioClient.calls(call_sid).update({
@@ -810,7 +778,14 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
       destination: route.destination
     }, 'Transfer TwiML injected successfully');
 
-    // Update database
+    // STEP 3: Respond to HTTP tool call
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Transfer completed'
+    }));
+
+    // STEP 4: Update database
     await supabase
       .from('call_logs')
       .update({
