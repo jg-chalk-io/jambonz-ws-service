@@ -478,13 +478,19 @@ async function handleStreamStatus(data, req, res) {
 
     if (pendingTransfer.is_aircall) {
       // Aircall transfer via Elastic SIP trunk
+      // Use direct phone number dialing - Twilio routes via trunk automatically
       transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Connecting you to our team now.</Say>
-  <Dial ${callerIdAttr}>
-    <Sip>sip:${pendingTransfer.destination_number}@aircall-custom.sip.us1.twilio.com</Sip>
-  </Dial>
+  <Dial ${callerIdAttr}>${pendingTransfer.destination_number}</Dial>
 </Response>`;
+
+      logger.info({
+        call_sid,
+        destination: pendingTransfer.destination_number,
+        callerIdAttr,
+        twiml: transferTwiml
+      }, 'Generated Aircall transfer TwiML (phone number routing)');
     } else {
       // Standard PSTN transfer
       transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -492,6 +498,13 @@ async function handleStreamStatus(data, req, res) {
   <Say>Connecting you to our team now.</Say>
   <Dial ${callerIdAttr}>${pendingTransfer.destination_number}</Dial>
 </Response>`;
+
+      logger.info({
+        call_sid,
+        destination: pendingTransfer.destination_number,
+        callerIdAttr,
+        twiml: transferTwiml
+      }, 'Generated PSTN transfer TwiML');
     }
 
     // Update database to mark transfer as completed
@@ -559,6 +572,12 @@ async function handleTwilioTransfer(toolData, req, res) {
       callLogId = mapping?.call_log_id;
     }
 
+    // Construct caller name from separate fields if needed
+    const callerName = toolData.caller_name ||
+                      (toolData.first_name && toolData.last_name
+                        ? `${toolData.first_name} ${toolData.last_name}`.trim()
+                        : toolData.first_name || 'Unknown');
+
     // Log tool call to database IMMEDIATELY for reliability
     logId = await ToolCallLogger.logToolCall({
       toolName: 'transferFromAiTriageWithMetadata',
@@ -567,7 +586,7 @@ async function handleTwilioTransfer(toolData, req, res) {
       twilioCallSid: null, // Will be determined below
       callLogId: callLogId, // Link to call_logs
       callbackNumber: toolData.callback_number,
-      callerName: toolData.caller_name,
+      callerName: callerName, // Now supports first_name + last_name OR caller_name
       urgencyLevel: urgencyLevel,
       toolData: {
         ...toolData,
