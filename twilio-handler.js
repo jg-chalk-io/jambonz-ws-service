@@ -425,7 +425,10 @@ async function generateIncomingCallTwiML(from, to, callSid) {
 
 /**
  * Handle stream status callback from Twilio
- * Called when <Connect><Stream> ends - this is when we execute the transfer
+ * Called when <Connect><Stream> status changes
+ *
+ * Note: With immediate transfer execution, this is now just for logging
+ * Transfers are executed IMMEDIATELY in the HTTP tool endpoint, not here
  */
 async function handleStreamStatus(data, req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -440,109 +443,14 @@ async function handleStreamStatus(data, req, res) {
     data
   }, 'Stream status callback received');
 
-  // Only proceed if stream ended
-  // StreamEvent values: "stream-started", "stream-stopped"
-  if (streamEvent !== 'stream-stopped' && streamEvent !== 'stopped' && streamEvent !== 'ended') {
-    logger.info({call_sid, streamEvent}, 'Stream not ended yet - no action');
-    res.writeHead(200, {'Content-Type': 'text/xml'});
-    res.end('<Response></Response>');
-    return;
+  // Log stream events for debugging
+  if (streamEvent === 'stream-stopped' || streamEvent === 'stopped' || streamEvent === 'ended') {
+    logger.info({call_sid}, 'Ultravox stream ended');
   }
 
-  try {
-    // Look up pending transfer
-    const {data: pendingTransfer, error: transferError} = await supabase
-      .from('pending_transfers')
-      .select('*')
-      .eq('call_sid', call_sid)
-      .order('created_at', {ascending: false})
-      .limit(1)
-      .single();
-
-    if (transferError || !pendingTransfer) {
-      logger.info({call_sid}, 'No pending transfer found - ending call normally');
-      res.writeHead(200, {'Content-Type': 'text/xml'});
-      res.end('<Response><Hangup/></Response>');
-      return;
-    }
-
-    logger.info({
-      call_sid,
-      destination: pendingTransfer.destination_number,
-      isAircall: pendingTransfer.is_aircall
-    }, 'Executing pending transfer');
-
-    // Build transfer TwiML
-    let transferTwiml;
-    const callerIdAttr = pendingTransfer.caller_number ? `callerId="${pendingTransfer.caller_number}"` : '';
-
-    if (pendingTransfer.is_aircall) {
-      // Aircall transfer via Elastic SIP trunk
-      // Use direct phone number dialing - Twilio routes via trunk automatically
-      transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Connecting you to our team now.</Say>
-  <Dial ${callerIdAttr}>${pendingTransfer.destination_number}</Dial>
-</Response>`;
-
-      logger.info({
-        call_sid,
-        destination: pendingTransfer.destination_number,
-        callerIdAttr,
-        twiml: transferTwiml
-      }, 'Generated Aircall transfer TwiML (phone number routing)');
-    } else {
-      // Standard PSTN transfer
-      transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Connecting you to our team now.</Say>
-  <Dial ${callerIdAttr}>${pendingTransfer.destination_number}</Dial>
-</Response>`;
-
-      logger.info({
-        call_sid,
-        destination: pendingTransfer.destination_number,
-        callerIdAttr,
-        twiml: transferTwiml
-      }, 'Generated PSTN transfer TwiML');
-    }
-
-    // Execute transfer via Twilio REST API
-    try {
-      await twilioClient.calls(call_sid).update({
-        twiml: transferTwiml
-      });
-
-      logger.info({call_sid, destination: pendingTransfer.destination_number}, 'Transfer executed successfully via Twilio API');
-
-      // Update database to mark transfer as completed
-      await supabase
-        .from('call_logs')
-        .update({
-          transfer_completed_at: new Date().toISOString()
-        })
-        .eq('call_sid', call_sid);
-
-      // Delete pending transfer
-      await supabase
-        .from('pending_transfers')
-        .delete()
-        .eq('call_sid', call_sid);
-
-    } catch (twilioError) {
-      logger.error({call_sid, error: twilioError.message}, 'Failed to execute transfer via Twilio API');
-      // Don't delete pending transfer if Twilio update failed
-    }
-
-    // statusCallback response (Twilio ignores TwiML in statusCallback)
-    res.writeHead(200, {'Content-Type': 'text/xml'});
-    res.end('<Response></Response>');
-
-  } catch (err) {
-    logger.error({err, call_sid}, 'Error handling stream status');
-    res.writeHead(200, {'Content-Type': 'text/xml'});
-    res.end('<Response><Hangup/></Response>');
-  }
+  // Simple acknowledgment response
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end('<Response></Response>');
 }
 
 /**
@@ -800,27 +708,25 @@ async function performTransfer(call_sid, to_phone_number, ultravoxCallId, toolDa
 }
 
 /**
- * Perform Twilio phone number transfer using TwiML flow control
+ * Perform Twilio phone number transfer using immediate REST API execution
  *
- * Transfer Strategy (TwiML Flow Method):
+ * Transfer Strategy (Immediate Execution Method):
  * 1. Ultravox invokes HTTP tool → makes POST to /twilio/transferToOnCall
- * 2. Store transfer details in database (destination, caller info)
- * 3. Tell Ultravox agent to say goodbye and end the call naturally
- * 4. When <Connect><Stream> ends, Twilio calls statusCallback
- * 5. statusCallback endpoint returns transfer TwiML with <Dial>
- * 6. Customer is seamlessly transferred to destination
+ * 2. Build transfer TwiML with <Dial> to destination
+ * 3. IMMEDIATELY execute transfer via Twilio REST API: twilioClient.calls(call_sid).update({twiml})
+ * 4. Respond with 204 No Content → Ultravox session ends
+ * 5. Customer is seamlessly transferred to destination
  *
  * Why This Works:
- * - Cannot update TwiML during active <Connect><Stream> (call is locked)
- * - Instead, let stream end naturally and use statusCallback
- * - Twilio's TwiML flow control handles state transitions automatically
- * - No REST API call.update() needed (avoids 404 errors)
- * - Customer experiences: AI goodbye → brief pause → human answers
+ * - Executes transfer WHILE call is still in "in-progress" state
+ * - Ultravox stream ends gracefully after 204 response
+ * - Retry logic handles race conditions where call object isn't fully ready
+ * - Customer experiences: Brief AI pause → human answers
  *
- * Key Insight from Expert:
- * - <Connect><Stream> locks the call - REST API updates return 404
- * - TwiML redirect pattern is standard Twilio approach for sequential flows
- * - statusCallback provides natural transition point
+ * Why Pending Transfer Pattern Failed:
+ * - By the time statusCallback fires, call is no longer "in-progress"
+ * - Race condition: stream ends → call ends → cannot redirect
+ * - Error: "Call is not in-progress. Cannot redirect."
  *
  * Aircall Integration:
  * - Uses Elastic SIP trunk routing (phone number association)
@@ -829,7 +735,7 @@ async function performTransfer(call_sid, to_phone_number, ultravoxCallId, toolDa
  *
  * Cost Efficiency:
  * - Transfer happens within Twilio (PSTN or Elastic SIP)
- * - Ultravox call ends naturally after saying goodbye
+ * - Ultravox session ends after 204 response
  * - No additional outbound calls needed
  */
 async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultravoxCallId, route, toolData, res) {
@@ -841,13 +747,6 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
     urgencyReason: toolData.urgency_reason
   }, 'Performing phone transfer via Twilio');
 
-  // Get client info to check if this is an Aircall transfer
-  const {data: callMapping} = await supabase
-    .from('twilio_ultravox_calls')
-    .select('to_number')
-    .eq('twilio_call_sid', call_sid)
-    .single();
-
   // Check if this is Aircall transfer (uses SIP trunk)
   const isAircallNumber = route.destination === '+13652972501';
 
@@ -858,70 +757,84 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
     isAircall: isAircallNumber
   }, 'Starting transfer process');
 
-  try {
-    // STEP 1: Store transfer details in database for statusCallback to use
-    logger.info({call_sid}, 'Storing pending transfer details');
+  // Use original caller's number as caller ID (pass-through)
+  // If not available, omit callerId attribute to let Twilio use default
+  const callerIdAttr = originalCallerNumber ? `callerId="${originalCallerNumber}"` : '';
 
-    await supabase
-      .from('pending_transfers')
-      .insert({
-        call_sid: call_sid,
-        ultravox_call_id: ultravoxCallId,
-        destination_number: route.destination,
-        caller_number: originalCallerNumber,
-        caller_name: toolData.caller_name,
-        urgency_reason: toolData.urgency_reason,
-        transfer_type: route.type,
-        transfer_method: route.method,
-        is_aircall: isAircallNumber,
-        created_at: new Date().toISOString()
+  // Build transfer TwiML
+  // Note: Uses phone number routing which auto-routes via Elastic SIP trunk if number is associated
+  const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Connecting you to our team now.</Say>
+  <Dial ${callerIdAttr}>${route.destination}</Dial>
+</Response>`;
+
+  logger.info({
+    call_sid,
+    destination: route.destination,
+    callerIdAttr,
+    isAircall: isAircallNumber,
+    twiml: transferTwiml
+  }, 'Generated Aircall transfer TwiML (phone number routing)');
+
+  // Execute transfer IMMEDIATELY via Twilio REST API
+  // Retry logic to handle race condition where call was just created
+  let retryCount = 0;
+  const maxRetries = 3;
+  let lastError;
+
+  while (retryCount < maxRetries) {
+    try {
+      await twilioClient.calls(call_sid).update({
+        twiml: transferTwiml
       });
 
-    logger.info({
-      call_sid,
-      destination: route.destination,
-      isAircall: isAircallNumber
-    }, 'Pending transfer stored - will execute when stream ends');
+      logger.info({
+        call_sid,
+        destination: route.destination,
+        retries: retryCount
+      }, 'Transfer executed successfully via Twilio API');
 
-    // STEP 2: Respond to HTTP tool with instructions for Ultravox agent
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify({
-      success: true,
-      message: 'Transfer initiated. Please say goodbye to the caller and end the call. They will be automatically connected to our team.',
-      // This tells Ultravox agent what to do
-      action: 'end_call_after_goodbye'
-    }));
+      // Update database to mark transfer as completed
+      await supabase
+        .from('call_logs')
+        .update({
+          transferred_to_human: true,
+          transfer_completed_at: new Date().toISOString()
+        })
+        .eq('call_sid', call_sid);
 
-    // STEP 3: Update call_logs to mark transfer as pending
-    await supabase
-      .from('call_logs')
-      .update({
-        transferred_to_human: true,
-        transfer_initiated_at: new Date().toISOString()
-      })
-      .eq('call_sid', call_sid);
+      // Respond with 204 to end Ultravox session
+      res.status(204).send();
+      return;
 
-    logger.info({call_sid}, 'Transfer marked as pending - waiting for stream to end');
+    } catch (twilioError) {
+      lastError = twilioError;
+      retryCount++;
 
-  } catch (err) {
-    logger.error({
-      err,
-      call_sid,
-      ultravoxCallId,
-      destination: route.destination
-    }, 'Error during transfer process');
+      // If 404 error (call not found yet), retry after brief delay
+      if (twilioError.status === 404 && retryCount < maxRetries) {
+        logger.warn({
+          call_sid,
+          retryCount,
+          error: twilioError.message
+        }, 'Call not found yet, retrying after delay...');
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+        continue;
+      }
 
-    // If response hasn't been sent yet, send error response
-    if (!res.headersSent) {
-      res.writeHead(500, {'Content-Type': 'application/json'});
-      res.end(JSON.stringify({
-        success: false,
-        error: err.message
-      }));
+      // For other errors or max retries exceeded, throw
+      logger.error({
+        call_sid,
+        error: twilioError.message,
+        retries: retryCount
+      }, 'Failed to execute transfer via Twilio API');
+      throw twilioError;
     }
-
-    throw err;
   }
+
+  // If we get here, all retries failed
+  throw lastError;
 }
 
 /**
