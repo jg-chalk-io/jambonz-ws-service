@@ -454,6 +454,35 @@ async function handleStreamStatus(data, req, res) {
 }
 
 /**
+ * Normalize phone number to E.164 format (+1XXXXXXXXXX)
+ * Needed for Aircall insight card matching
+ */
+function normalizePhoneNumber(phoneNumber) {
+  if (!phoneNumber) return null;
+
+  // Remove all non-digits
+  const digits = phoneNumber.replace(/\D/g, '');
+
+  // If it's 10 digits (US/Canada), add +1
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+
+  // If it's 11 digits starting with 1, add +
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+${digits}`;
+  }
+
+  // If it already has +, return as-is
+  if (phoneNumber.startsWith('+')) {
+    return phoneNumber;
+  }
+
+  // Otherwise return with + prefix
+  return `+${digits}`;
+}
+
+/**
  * Handle transfer for Twilio calls using REST API
  */
 async function handleTwilioTransfer(toolData, req, res) {
@@ -497,6 +526,9 @@ async function handleTwilioTransfer(toolData, req, res) {
                         ? `${toolData.first_name} ${toolData.last_name}`.trim()
                         : toolData.first_name || 'Unknown');
 
+    // Normalize callback_number to E.164 format for Aircall insight card matching
+    const normalizedCallbackNumber = normalizePhoneNumber(toolData.callback_number);
+
     // Log tool call to database IMMEDIATELY for reliability
     logId = await ToolCallLogger.logToolCall({
       toolName: 'transferFromAiTriageWithMetadata',
@@ -504,7 +536,7 @@ async function handleTwilioTransfer(toolData, req, res) {
       ultravoxCallId: ultravoxCallId,
       twilioCallSid: null, // Will be determined below
       callLogId: callLogId, // Link to call_logs
-      callbackNumber: toolData.callback_number,
+      callbackNumber: normalizedCallbackNumber, // Use normalized number for Aircall matching
       callerName: callerName, // Now supports first_name + last_name OR caller_name
       urgencyLevel: urgencyLevel,
       toolData: {
@@ -765,7 +797,6 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
   // Note: Uses phone number routing which auto-routes via Elastic SIP trunk if number is associated
   const transferTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Connecting you to our team now.</Say>
   <Dial ${callerIdAttr}>${route.destination}</Dial>
 </Response>`;
 
