@@ -170,16 +170,49 @@ async function processInsightCard({call_id, caller_number, target_number, startT
       callerName: transferData.caller_name
     }, 'Built insight card from transfer data');
 
-    // 3. Send insight card to Aircall
-    const sendResult = await AircallInsights.sendInsightCard(call_id, cardContent);
+    // 3. Get real Aircall Call ID (call_id from widget is Twilio SID when using SIP trunk)
+    const aircallCallId = await AircallInsights.getAircallCallId(caller_number);
+
+    if (!aircallCallId) {
+      logger.warn({call_id, caller_number}, 'Could not find Aircall Call ID - skipping insight card');
+
+      // Log as failed
+      await AircallInsights.logInsightCard({
+        aircallCallId: call_id,
+        callerNumber: caller_number,
+        targetNumber: target_number,
+        toolCallLogId: transferData.id,
+        cardContent: cardContent,
+        routedToType: 'team',
+        routedToId: process.env.AIRCALL_NORA_INBOUND_TEAM_ID,
+        cardStatus: 'failed',
+        errorMessage: 'Could not find Aircall Call ID',
+        processingTimeMs: Date.now() - startTime
+      });
+
+      return {
+        success: false,
+        reason: 'no_aircall_id',
+        cardStatus: 'failed'
+      };
+    }
+
+    logger.info({
+      twilioCallSid: call_id,
+      aircallCallId: aircallCallId,
+      caller_number
+    }, 'Found Aircall Call ID via Search API');
+
+    // 4. Send insight card to Aircall using the real Aircall Call ID
+    const sendResult = await AircallInsights.sendInsightCard(aircallCallId, cardContent);
 
     // 4. Extract data for logging
     const params = transferData.tool_parameters || {};
     const cardStatus = sendResult.success ? 'success' : 'failed';
 
-    // 5. Log to database
+    // 5. Log to database (use real Aircall Call ID)
     await AircallInsights.logInsightCard({
-      aircallCallId: call_id,
+      aircallCallId: aircallCallId,
       callerNumber: caller_number,
       targetNumber: target_number,
       toolCallLogId: transferData.id,
