@@ -507,25 +507,36 @@ async function handleStreamStatus(data, req, res) {
       }, 'Generated PSTN transfer TwiML');
     }
 
-    // Update database to mark transfer as completed
-    await supabase
-      .from('call_logs')
-      .update({
-        transfer_completed_at: new Date().toISOString()
-      })
-      .eq('call_sid', call_sid);
+    // Execute transfer via Twilio REST API
+    try {
+      await twilioClient.calls(call_sid).update({
+        twiml: transferTwiml
+      });
 
-    // Delete pending transfer
-    await supabase
-      .from('pending_transfers')
-      .delete()
-      .eq('call_sid', call_sid);
+      logger.info({call_sid, destination: pendingTransfer.destination_number}, 'Transfer executed successfully via Twilio API');
 
-    logger.info({call_sid}, 'Transfer TwiML returned');
+      // Update database to mark transfer as completed
+      await supabase
+        .from('call_logs')
+        .update({
+          transfer_completed_at: new Date().toISOString()
+        })
+        .eq('call_sid', call_sid);
 
-    // Return transfer TwiML
+      // Delete pending transfer
+      await supabase
+        .from('pending_transfers')
+        .delete()
+        .eq('call_sid', call_sid);
+
+    } catch (twilioError) {
+      logger.error({call_sid, error: twilioError.message}, 'Failed to execute transfer via Twilio API');
+      // Don't delete pending transfer if Twilio update failed
+    }
+
+    // statusCallback response (Twilio ignores TwiML in statusCallback)
     res.writeHead(200, {'Content-Type': 'text/xml'});
-    res.end(transferTwiml);
+    res.end('<Response></Response>');
 
   } catch (err) {
     logger.error({err, call_sid}, 'Error handling stream status');
