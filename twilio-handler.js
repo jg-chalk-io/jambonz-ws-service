@@ -835,8 +835,9 @@ async function performTwilioPhoneTransfer(call_sid, originalCallerNumber, ultrav
         })
         .eq('call_sid', call_sid);
 
-      // Respond with 204 to end Ultravox session
-      res.status(204).send();
+      // Respond with 204 to end Ultravox session (Node.js HTTP syntax)
+      res.writeHead(204);
+      res.end();
       return;
 
     } catch (twilioError) {
