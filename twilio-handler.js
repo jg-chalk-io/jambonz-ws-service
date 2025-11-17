@@ -303,6 +303,7 @@ async function generateIncomingCallTwiML(from, to, callSid) {
     // === TWILIO CALL PARAMETERS ===
     call_sid: callSid,
     caller_phone_number: callerPhone10Digit,
+    callback_number: from, // E.164 format for tool parameter (alias for caller_phone_number)
     caller_phone_last4: callerLast4,
     caller_phone_formatted: callerFormatted,
     caller_phone_digits: callerPhoneDigits,
